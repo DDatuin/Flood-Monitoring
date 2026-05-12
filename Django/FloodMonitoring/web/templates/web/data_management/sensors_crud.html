@@ -206,27 +206,63 @@
         <div x-show="openEditModal" x-transition class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-blue-50/50">
                 <h2 class="text-xl font-bold text-slate-800">Edit Sensor: <span x-text="selectedSensor.id" class="text-blue-600"></span></h2>
-                <button @click="openEditModal = false" class="text-slate-400 p-2 hover:text-slate-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <button @click="openEditModal = false" class="text-slate-400 p-2 hover:text-slate-600 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
-            <div class="p-8 overflow-y-auto custom-scroll">
+
+            <div class="overflow-y-auto p-8 flex-grow custom-scroll">
                 <form id="editForm" method="POST" action="{% url 'edit_sensor' %}">
                     {% csrf_token %}
                     <input type="hidden" name="sensor_id" :value="selectedSensor.id">
+                    
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="md:col-span-2">
-                            <label class="block text-xs font-black text-slate-500 uppercase mb-2">Location</label>
-                            <input type="text" name="location_name" x-model="selectedSensor.location" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
+                            <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Location Name</label>
+                            <input type="text" name="location_name" x-model="selectedSensor.location" placeholder="e.g., North River Bridge" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 outline-none transition font-semibold">
                         </div>
+
                         <div class="md:col-span-2 flex items-end gap-3">
                             <div class="flex-grow grid grid-cols-2 gap-4">
-                                <div><label class="block text-xs font-black text-slate-500 uppercase mb-2">Lat</label><input type="number" step="any" name="latitude" x-model="selectedSensor.lat" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"></div>
-                                <div><label class="block text-xs font-black text-slate-500 uppercase mb-2">Lng</label><input type="number" step="any" name="longitude" x-model="selectedSensor.lng" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl"></div>
+                                <div>
+                                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Latitude</label>
+                                    <input type="number" name="latitude" step="any" x-model="selectedSensor.lat" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 transition">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Longitude</label>
+                                    <input type="number" name="longitude" step="any" x-model="selectedSensor.lng" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-500/10 transition">
+                                </div>
                             </div>
-                            <button type="button" @click="openPicker('edit')" class="bg-blue-50 text-blue-600 p-2.5 rounded-xl border border-blue-100 hover:bg-blue-100 transition"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 0 0-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 0 0 2.682 2.282 16.975 16.975 0 0 0 1.145.742ZM12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd" /></svg></button>
+                            <button type="button" @click="openPicker('edit')" class="bg-blue-50 text-blue-600 p-2.5 rounded-xl border border-blue-100 hover:bg-blue-100 transition shadow-sm flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                                    <path fill-rule="evenodd" d="m11.54 22.351.07.04.028.016a.76.76 0 0 0 .723 0l.028-.015.071-.041a16.975 16.975 0 0 0 1.144-.742 19.58 19.58 0 0 0 2.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 0 0-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 0 0 2.682 2.282 16.975 16.975 0 0 0 1.145.742ZM12 13.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Token</label>
+                            <input type="text" name="token" x-model="selectedSensor.token" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:ring-4 focus:ring-blue-500/10 outline-none transition text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">PIN</label>
+                            <input type="text" name="pin" x-model="selectedSensor.pin" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-mono focus:ring-4 focus:ring-blue-500/10 outline-none transition text-sm">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Radius (m)</label>
+                            <input type="number" name="radius" step="0.1" x-model="selectedSensor.radius" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 outline-none transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Height (m)</label>
+                            <input type="number" name="height" step="0.1" x-model="selectedSensor.height" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 outline-none transition">
                         </div>
                     </div>
                 </form>
             </div>
+
             <div class="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/30">
                 <button @click="openEditModal = false" class="px-6 py-3 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition">Discard</button>
                 <button type="submit" form="editForm" class="bg-blue-600 text-white px-10 py-3 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition">Update Sensor</button>

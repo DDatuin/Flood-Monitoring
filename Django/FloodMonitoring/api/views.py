@@ -15,18 +15,22 @@ from .serializers import (
     SensorDataSerializer,
 )
 
+# Serializer for VehicleFloodThreshold 
 class VehicleThresholdList(generics.ListCreateAPIView):
     queryset = VehicleFloodThreshold.objects.all()
     serializer_class = VehicleThresholdSerializer
 
+# Serializer for Sensor
 class SensorList(generics.ListCreateAPIView):
     queryset = Sensor.objects.all()
     serializer_class = SensorSerializer
 
+# Serializer for SensorData
 class SensorDataList(generics.ListCreateAPIView):
     queryset = SensorData.objects.all()
     serializer_class = SensorDataSerializer
 
+# Serializer for EmergencyContact
 class EmergencyContactList(generics.ListCreateAPIView):
     queryset = EmergencyContact.objects.all()
     serializer_class = EmergencyContactSerializer

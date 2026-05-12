@@ -233,24 +233,55 @@ class _MapScreenState extends State<MapScreen> {
 
   /// ----- BUILD SENSOR MAKERS -----
   Future<void> _buildSensorMarkers() async {
-    final BitmapDescriptor sensorIcon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(48, 48)),
-      'assets/images/sensor_location.png',
-    );
+    _removeAllSensorMarkers();
+
+    final Map<String, String> iconPaths = {
+      'Safe': 'assets/images/sensor_location_safe.png',
+      'Warning': 'assets/images/sensor_location_warning.png',
+      'Danger': 'assets/images/sensor_location_danger.png',
+      'Default': 'assets/images/sensor_location.png',
+    };
+
+    Map<String, BitmapDescriptor> loadedIcons = {};
+
+    for (var entry in iconPaths.entries) {
+      loadedIcons[entry.key] = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        entry.value,
+      );
+    }
 
     setState(() {
-      _markers.clear();
       sensors.forEach((id, sensor) {
+        BitmapDescriptor currentIcon;
+
+        if (selectedVehicle == '') {
+          currentIcon = loadedIcons['Default']!;
+        } else {
+          final String status = sensor['sensorData']?['status'] ?? 'Default';
+          currentIcon = loadedIcons[status] ?? loadedIcons['Default']!;
+        }
+
         _markers.add(
           Marker(
             markerId: MarkerId(id),
             position: sensor['position'],
-            icon: sensorIcon,
+            icon: currentIcon,
+            anchor: const Offset(0.5, 0.5),
             onTap: () => _onSensorTap(id, sensor),
             zIndex: 2,
           ),
         );
       });
+    });
+  }
+
+  /// ----- REMOVE ALL SENSOR MARKERS -----
+  void _removeAllSensorMarkers() {
+    setState(() {
+      _markers.removeWhere((marker) =>
+          marker.markerId.value.startsWith('sensor_')
+      );
     });
   }
 
@@ -277,7 +308,7 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       Position freshPosition = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
+        desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 5),
       );
 
@@ -337,8 +368,13 @@ class _MapScreenState extends State<MapScreen> {
       position.longitude,
     );
 
-    // ⭐ smooth GPS instead of animating
-    LatLng userLatLng = smoothPosition(rawLatLng);
+    LatLng userLatLng = rawLatLng;
+
+    setState(() {
+      currentPosition = position;
+    });
+
+    _addUserMarker();
 
     setState(() {
       currentPosition = Position(
@@ -476,6 +512,7 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     await Future.wait(futures);
+    _refreshSensorMarkers();
 
     print("All sensors updated");
   }
@@ -501,7 +538,7 @@ class _MapScreenState extends State<MapScreen> {
             icon: sensorIcon, // <-- use custom sensor image
             infoWindow: showSensorLabels ? InfoWindow(title: id) : InfoWindow.noText,
             anchor: const Offset(0.5, 0.5),
-              onTap: () => _onSensorTap(id, sensor),
+            onTap: () => _onSensorTap(id, sensor),
             zIndex: 2,
           ),
         );
@@ -517,14 +554,14 @@ class _MapScreenState extends State<MapScreen> {
   /// ----- ON SENSOR TAP -----
   Future<void> _onSensorTap(String id, Map<String, dynamic> sensor) async {
 
-    if (selectedVehicle.isEmpty) {
-      showSelectVehicleToast(context);
-      return;
-    } else {
-      setState(() {
-        showMainSheet = false;
-      });
-    }
+    // if (selectedVehicle.isEmpty) {
+    //   showSelectVehicleToast(context);
+    //   return;
+    // } else {
+    //   setState(() {
+    //     showMainSheet = false;
+    //   });
+    // }
 
     final LatLng sensorPos = sensor['position'];
     final LatLng offsetTarget = _offsetPosition(sensorPos, 0.0090);
@@ -544,6 +581,7 @@ class _MapScreenState extends State<MapScreen> {
       selectedSensorId = id;
       showDirectionSheet = false;
       showSensorSettingsSheet = false;
+      showMainSheet = false;
 
       cancelPinSelection();
 
@@ -553,14 +591,17 @@ class _MapScreenState extends State<MapScreen> {
     // Update circle for the selected sensor
     if (showSensorCoverage) {
       _circles.removeWhere((c) => c.circleId.value.startsWith(id));
+
+      final Color statusColor = _getStatusColor(sensor['sensorData']['status']);
+
       _circles.add(
         Circle(
           circleId: CircleId('${id}_circle'),
           center: sensor['position'],
-          radius: 100,
+          radius: sensor['radius'],
           strokeWidth: 2,
-          strokeColor: _getStatusColor(sensor['sensorData']['status']),
-          fillColor: _getStatusColor(sensor['sensorData']['status']).withOpacity(0.3),
+          strokeColor: statusColor,
+          fillColor: statusColor.withOpacity(0.3),
         ),
       );
     }
@@ -569,6 +610,11 @@ class _MapScreenState extends State<MapScreen> {
 
   /// ----- GET STATUS COLOR -----
   Color _getStatusColor(String status) {
+
+    if (selectedVehicle.isEmpty) {
+      return Colors.black;
+    }
+
     switch (status) {
       case "Safe":
         return colorSafe;
@@ -633,28 +679,63 @@ class _MapScreenState extends State<MapScreen> {
           zIndex: 2,
         ),
       );
+
+      _circles.removeWhere((c) => c.circleId.value == 'user_glow');
+
+      _circles.add(
+        Circle(
+          circleId: const CircleId('user_glow'),
+          center: userLatLng,
+          radius: 200.0,
+          fillColor: Colors.blue.withOpacity(0.10),
+          strokeColor: Colors.transparent, // No border
+          strokeWidth: 0,
+          zIndex: 1,
+        ),
+      );
     });
   }
 
   /// ----- REFRESH SENSOR MARKERS -----
   void _refreshSensorMarkers() async {
-    final BitmapDescriptor sensorIcon = await BitmapDescriptor.fromAssetImage(
-      const ImageConfiguration(size: Size(48, 48)),
-      'assets/images/sensor_location.png',
-    );
+    // Clear existing sensor markers first
+    _removeAllSensorMarkers();
+
+    final Map<String, String> iconPaths = {
+      'Safe': 'assets/images/sensor_location_safe.png',
+      'Warning': 'assets/images/sensor_location_warning.png',
+      'Danger': 'assets/images/sensor_location_danger.png',
+      'Default': 'assets/images/sensor_location.png',
+    };
+
+    Map<String, BitmapDescriptor> loadedIcons = {};
+
+    for (var entry in iconPaths.entries) {
+      loadedIcons[entry.key] = await BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        entry.value,
+      );
+    }
 
     setState(() {
-      _markers.removeWhere((m) => sensors.containsKey(m.markerId.value.replaceAll('_labeled', '')));
-
+      // Basic visibility toggle
       if (!showAllSensors) return;
 
       sensors.forEach((id, sensor) {
-        final String status = sensor['sensorData']['status'];
+        final String status = sensor['sensorData']?['status'] ?? 'Default';
 
+        // 1. Filter logic: skip non-critical sensors if the toggle is ON
         if (showCriticalSensors) {
           if (status != 'Warning' && status != 'Danger') {
             return;
           }
+        }
+
+        BitmapDescriptor currentIcon;
+        if (selectedVehicle == '') {
+          currentIcon = loadedIcons['Default']!;
+        } else {
+          currentIcon = loadedIcons[status] ?? loadedIcons['Default']!;
         }
 
         final String uniqueId = showSensorLabels ? "${id}_labeled" : id;
@@ -663,7 +744,7 @@ class _MapScreenState extends State<MapScreen> {
           Marker(
             markerId: MarkerId(uniqueId),
             position: sensor['position'],
-            icon: sensorIcon,
+            icon: currentIcon,
             anchor: const Offset(0.5, 0.5),
             infoWindow: showSensorLabels
                 ? InfoWindow(title: id)
@@ -798,6 +879,9 @@ class _MapScreenState extends State<MapScreen> {
 
     if (selectedVehicle.isEmpty) {
       showSelectVehicleToast(context);
+      showSensorSheet = false;
+      showMainSheet = true;
+      _circles.removeWhere((c) => c.circleId.value.startsWith('sensor'));
       return;
     } else {
       setState(() {
@@ -842,6 +926,7 @@ class _MapScreenState extends State<MapScreen> {
         showSensorSheet = false;
         showSensorSettingsSheet = false;
         showRerouteConfirmationSheet = false;
+        _circles.removeWhere((c) => c.circleId.value.startsWith('sensor'));
       });
 
       if (savedStartPosition != null) {
@@ -1102,6 +1187,7 @@ class _MapScreenState extends State<MapScreen> {
           showSensorSheet = false;
           showSensorSettingsSheet = false;
           showRerouteConfirmationSheet = false;
+          _circles.removeWhere((c) => c.circleId.value.startsWith('sensor'));
         });
 
         // Drawing logic for destination...
@@ -1181,6 +1267,7 @@ class _MapScreenState extends State<MapScreen> {
             showSensorSheet = false;
             showSensorSettingsSheet = false;
             showRerouteConfirmationSheet = false;
+            _circles.removeWhere((c) => c.circleId.value.startsWith('sensor'));
           });
 
           // Use 'position' directly here to ensure the line connects to the NEW pin
@@ -1407,6 +1494,9 @@ class _MapScreenState extends State<MapScreen> {
                   onPressed: () {
                     if (showMainSheet && selectedVehicle.isEmpty) {
                       showSelectVehicleToast(context);
+                      showSensorSheet = false;
+                      showMainSheet = true;
+                      _circles.removeWhere((c) => c.circleId.value.startsWith('sensor'));
                       return;
                     }
 
@@ -1867,6 +1957,7 @@ class _MapScreenState extends State<MapScreen> {
                 if (sensorDragOffset < -sensorSheetHeight / 2) {
                   setState(() {
                     showSensorSheet = false;
+                    showMainSheet = selectedVehicle.isEmpty;
                     sensorDragOffset = 0;
                     _circles.removeWhere((c) => c.circleId.value.startsWith('sensor'));
                   });
@@ -1949,7 +2040,7 @@ class _MapScreenState extends State<MapScreen> {
                                       ),
                                     ),
                                     Text(
-                                      "Tap for more information",
+                                      "Tap View for more information",
                                       style: TextStyle(
                                         fontFamily: 'AvenirNext',
                                         fontSize: 14,
@@ -1988,7 +2079,9 @@ class _MapScreenState extends State<MapScreen> {
                                 _infoRow("Distance", "${data?['distance'] ?? "-"} cm"),
                                 _statusRow(
                                   "Status",
-                                  data?['status'] ?? "-",
+                                  (selectedVehicle.isEmpty)
+                                      ? "Pending..."
+                                      : (data?['status'] ?? "-"),
                                   _getStatusColor(data?['status'] ?? ""),
                                 ),
                                 _infoRow("Last Update", data?['lastUpdate'] ?? "-"),
@@ -2491,6 +2584,7 @@ class _MapScreenState extends State<MapScreen> {
                       tempSelectedVehicle = selectedVehicle;
                       cancelPinSelection();
                     });
+                    _circles.removeWhere((c) => c.circleId.value.startsWith('sensor'));
                   },
                   child: Container(
                     height: 40,
@@ -2525,69 +2619,70 @@ class _MapScreenState extends State<MapScreen> {
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
               opacity: showMainSheet ? 1 : 0,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 15),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.blueAccent.shade400,
-                      Colors.lightBlue.shade300,
+              child: Center(
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 15),
+                  constraints: const BoxConstraints(
+                    maxWidth: 400,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.blueAccent.shade400,
+                        Colors.lightBlue.shade300,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Text Column
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Flood Update\nin Your Zone',
-                            style: TextStyle(
-                              fontFamily: 'AvenirNext',
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700, // Bold
-                              color: Colors.white,
-                              height: 1.2,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Flood Update\nin Your Zone',
+                              style: TextStyle(
+                                fontFamily: 'AvenirNext',
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                height: 1.2,
+                              ),
                             ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Stay alert, stay safe',
-                            style: TextStyle(
-                              fontFamily: 'AvenirNext',
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500, // Medium
-                              color: Colors.white70,
+                            SizedBox(height: 8),
+                            Text(
+                              'Stay alert, stay safe',
+                              style: TextStyle(
+                                fontFamily: 'AvenirNext',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white70,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    // Image
-                    Image.asset(
-                      'assets/images/Flood-amico.png',
-                      width: 120,
-                      height: 120,
-                      fit: BoxFit.contain,
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Image.asset(
+                        'assets/images/Flood-amico.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.contain,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -2687,11 +2782,11 @@ class _MapScreenState extends State<MapScreen> {
                                   const SizedBox(height: 18),
 
                                   // VEHICLE SELECTION
-                                  SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    physics: const BouncingScrollPhysics(),
-                                    child: Row(
-                                      children: [
+                                  // VEHICLE SELECTION
+                                  LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      // Define the list of vehicles to avoid repeating code
+                                      final List<Widget> vehicleTiles = [
                                         vehicleSelection(
                                           name: 'Bicycle',
                                           imagePath: 'assets/images/vehicle/bicycle.png',
@@ -2711,6 +2806,7 @@ class _MapScreenState extends State<MapScreen> {
                                                   showMainSheet = false;
                                                   showDirectionSheet = true;
                                                   _goToUser();
+                                                  fetchDataForAllSensors();
                                                 });
                                               },
                                               onCancel: (v) {
@@ -2721,7 +2817,6 @@ class _MapScreenState extends State<MapScreen> {
                                             );
                                           },
                                         ),
-                                        const SizedBox(width: 16),
                                         vehicleSelection(
                                           name: 'Motorcycle',
                                           imagePath: 'assets/images/vehicle/motorcycle.png',
@@ -2741,6 +2836,7 @@ class _MapScreenState extends State<MapScreen> {
                                                   showMainSheet = false;
                                                   showDirectionSheet = true;
                                                   _goToUser();
+                                                  fetchDataForAllSensors();
                                                 });
                                               },
                                               onCancel: (v) {
@@ -2751,7 +2847,6 @@ class _MapScreenState extends State<MapScreen> {
                                             );
                                           },
                                         ),
-                                        const SizedBox(width: 16),
                                         vehicleSelection(
                                           name: 'Car',
                                           imagePath: 'assets/images/vehicle/car.png',
@@ -2770,6 +2865,7 @@ class _MapScreenState extends State<MapScreen> {
                                                   showMainSheet = false;
                                                   showDirectionSheet = true;
                                                   _goToUser();
+                                                  fetchDataForAllSensors();
                                                 });
                                               },
                                               onCancel: (v) {
@@ -2780,7 +2876,6 @@ class _MapScreenState extends State<MapScreen> {
                                             );
                                           },
                                         ),
-                                        const SizedBox(width: 16),
                                         vehicleSelection(
                                           name: 'Truck',
                                           imagePath: 'assets/images/vehicle/truck.png',
@@ -2799,6 +2894,7 @@ class _MapScreenState extends State<MapScreen> {
                                                   showMainSheet = false;
                                                   showDirectionSheet = true;
                                                   _goToUser();
+                                                  fetchDataForAllSensors();
                                                 });
                                               },
                                               onCancel: (v) {
@@ -2809,8 +2905,29 @@ class _MapScreenState extends State<MapScreen> {
                                             );
                                           },
                                         ),
-                                      ],
-                                    ),
+                                      ];
+
+                                      // LOGIC: If width > 350, center and space evenly. Otherwise, scroll.
+                                      if (constraints.maxWidth > 350) {
+                                        return Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                          children: vehicleTiles,
+                                        );
+                                      } else {
+                                        return SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          physics: const BouncingScrollPhysics(),
+                                          child: Row(
+                                            children: vehicleTiles.map((widget) {
+                                              return Padding(
+                                                padding: const EdgeInsets.only(right: 16),
+                                                child: widget,
+                                              );
+                                            }).toList(),
+                                          ),
+                                        );
+                                      }
+                                    },
                                   ),
                                   const SizedBox(height: 22),
 

@@ -228,9 +228,14 @@ class _InfoState extends State<Info> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  sensor['sensorData']['status'],
+                  (selectedVehicle!.isEmpty)
+                      ? "Pending..."
+                      : (sensor['sensorData']['status'] ?? "Unknown"),
                   style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
               )
             ],
@@ -242,7 +247,13 @@ class _InfoState extends State<Info> {
 
   /// ----- DATA STATUS COLOR -----
   Color dataStatusColor() {
-    switch (sensors[sensorViewInfo]!["sensorData"]['status']) {
+    if (selectedVehicle.isEmpty) {
+      return Colors.black;
+    }
+
+    final status = sensors[sensorViewInfo]?["sensorData"]?['status'];
+
+    switch (status) {
       case 'Safe':
         return Colors.green;
       case 'Warning':
@@ -266,8 +277,13 @@ class _InfoState extends State<Info> {
               "${UnitConverter.cmToFeet((sensor['sensorData']['floodHeight'] as num).toDouble()).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')} ft"
           ),
           _item("Distance to Water", "${sensor['sensorData']['distance']} cm"),
-          _item("Flood Status", sensor['sensorData']['status'],
-              color: dataStatusColor()),
+          _item(
+            "Flood Status",
+            (selectedVehicle.isEmpty)
+                ? "Pending..."
+                : (sensor['sensorData']['status'] ?? "Unknown"),
+            color: dataStatusColor(),
+          ),
           _item("Last Update", sensor['sensorData']['lastUpdate']),
         ],
       ),

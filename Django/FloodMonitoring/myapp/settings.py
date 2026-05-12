@@ -31,6 +31,7 @@ ALLOWED_HOSTS = [
     '192.168.1.4', 
     '192.168.0.100', 
     'localhost',
+    '*',
     'yeasty-rikki-nonchivalrously.ngrok-free.dev',
 ]
 
