@@ -16,6 +16,7 @@ import 'package:floodmonitoring/widgets/search_popup.dart';
 import 'package:floodmonitoring/widgets/toast.dart';
 import 'package:floodmonitoring/widgets/vehicle_info_popup.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -3094,7 +3095,64 @@ class _MapScreenState extends State<MapScreen> {
                                       ),
                                     ],
                                   ),
+
+                                  const SizedBox(height: 30),
+                                  const Divider(
+                                    color: Colors.grey,
+                                    thickness: 1,
+                                    indent: 20,
+                                    endIndent: 20,
+                                  ),
+                                  const SizedBox(height: 30),
+
+                                  primaryButton(
+                                    text: "Clear Route",
+                                    onTap: () {
+                                      setState(() {
+
+                                        _markers.removeWhere((m) =>
+                                        m.markerId.value == 'start_pin' ||
+                                            m.markerId.value == 'tapped_pin'
+                                        );
+
+
+                                        savedPinMarker = null;
+                                        savedPinPosition = null;
+                                        savedPlace = {
+                                          "name": "",
+                                          "location": LatLng(0.0, 0.0),
+                                        };
+
+                                        savedStartMarker = null;
+                                        savedStartPosition = null;
+                                        savedStartPlace = {
+                                          "name": "",
+                                          "location": LatLng(0.0, 0.0),
+                                        };
+
+
+                                        _polylines.clear();
+                                        _circles.clear();
+                                        normalRouting = true;
+                                        showMainSheet = false;
+                                        showDirectionSheet = true;
+
+                                        _goToUser();
+                                      });
+                                    },
+                                  ),
+
                                   const SizedBox(height: 16),
+
+                                  primaryButton2(
+                                    text: "Leave Navigation",
+                                    onTap: () {
+                                      SystemNavigator.pop();
+                                    },
+                                  ),
+
+                                  const SizedBox(height: 16),
+
                                 ],
                               ),
                             ),

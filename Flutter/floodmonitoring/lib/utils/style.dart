@@ -48,6 +48,7 @@ Widget primaryButton({
 }) {
   return SizedBox(
     height: 48,
+    width: double.infinity,
     child: ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: colorPrimaryMid,
@@ -89,6 +90,36 @@ Widget secondaryButton({
           fontSize: 16,
           fontWeight: FontWeight.bold,
           color: colorPrimaryMid,
+        ),
+      ),
+    ),
+  );
+}
+
+/// ----- PRIMARY BUTTON V2 -----
+Widget primaryButton2({
+  required String text,
+  required VoidCallback onTap,
+}) {
+  return SizedBox(
+    height: 48,
+    width: double.infinity,
+    child: ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.red.shade700,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      onPressed: onTap,
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
         ),
       ),
     ),
