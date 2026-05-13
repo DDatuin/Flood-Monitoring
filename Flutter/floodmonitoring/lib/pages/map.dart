@@ -439,6 +439,8 @@ class _MapScreenState extends State<MapScreen> {
 
   /// ----- START ALERT -----
   void startAlert() {
+
+    if (selectedVehicle.isEmpty) return;
     if (!nearAlertZone) {
 
       nearAlertZone = true;
@@ -1054,7 +1056,7 @@ class _MapScreenState extends State<MapScreen> {
         zoneCenter.longitude,
       );
 
-      if (distance <= radius + 500) {
+      if (distance <= radius + 300) {
         return true; // near this zone
       }
     }
@@ -3108,6 +3110,10 @@ class _MapScreenState extends State<MapScreen> {
                                   primaryButton(
                                     text: "Clear Route",
                                     onTap: () {
+                                      if (selectedVehicle.isEmpty) {
+                                        showSelectVehicleToast(context);
+                                        return;
+                                      }
                                       setState(() {
 
                                         _markers.removeWhere((m) =>
