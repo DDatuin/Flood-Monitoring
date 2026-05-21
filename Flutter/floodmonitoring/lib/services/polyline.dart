@@ -1,173 +1,61 @@
 import 'dart:convert';
-import 'dart:math';
+
 import 'package:http/http.dart' as http;
-import 'package:flexible_polyline_dart/flutter_flexible_polyline.dart';
-import 'package:flexible_polyline_dart/latlngz.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'global.dart';
 
-/// Service to fetch and decode route polylines from Google Maps or HERE Maps.
+import 'package:floodmonitoring/services/api_configs.dart';
+
 class PolylineService {
-  /// Routes to the appropriate provider based on whether 'avoid zones' are needed.
   static Future<List<LatLng>> getRoute(
-      LatLng origin,
-      LatLng destination, {
-        required bool normalRouting,
-        List<Map<String, dynamic>> avoidZones = const [],
-      }) async {
-    if (normalRouting) {
-      return _fetchGoogleRoute(origin, destination);
-    } else {
-      return _fetchHereRoute(origin, destination, avoidZones);
-    }
-  }
+    LatLng origin,
+    LatLng destination,
+    String vehicleType,
+    List<Map<String, dynamic>> avoidZones,
+  ) async {
+    try {
+      print("AVOID ZONES: $avoidZones");
 
-  // ========================================
-  // GOOGLE ROUTING (Standard navigation)
-  // ========================================
+      final payload = {
+        "start": [origin.latitude, origin.longitude],
+        "end": [destination.latitude, destination.longitude],
+        "vehicle": vehicleType,
+        "avoid_zones": avoidZones.map((z) {
+          final pos = z["position"];
 
-  /// Fetches a standard route using the Google Directions API.
-  static Future<List<LatLng>> _fetchGoogleRoute(
-      LatLng origin, LatLng destination) async {
-    final url = Uri.parse(
-        "https://routes.googleapis.com/directions/v2:computeRoutes");
+          return {
+            "lat": pos.latitude,
+            "lng": pos.longitude,
+            "radius": (z["radius"] as num).toDouble(),
+          };
+        }).toList(),
+      };
 
-    final payload = {
-      "origin": {
-        "location": {
-          "latLng": {
-            "latitude": origin.latitude,
-            "longitude": origin.longitude,
-          }
-        }
-      },
-      "destination": {
-        "location": {
-          "latLng": {
-            "latitude": destination.latitude,
-            "longitude": destination.longitude,
-          }
-        }
-      },
-      "travelMode": "DRIVE",
-      "polylineQuality": "HIGH_QUALITY"
-    };
+      final response = await http.post(
+        Uri.parse(ApiConfig.safeRoute),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
 
-    final res = await http.post(
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": googleMapAPIKey,
-        "X-Goog-FieldMask": "routes.polyline.encodedPolyline",
-      },
-      body: jsonEncode(payload),
-    );
+      print("RAW RESPONSE: ${response.body}");
+      print("STATUS: ${response.statusCode}");
 
-    if (res.statusCode != 200) {
-      print("Google API Error: ${res.body}");
+      final body = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && body["success"] == true) {
+        final coordinates = body["data"]["coordinates"];
+
+        return coordinates.map<LatLng>((coord) {
+          return LatLng(coord[1], coord[0]);
+        }).toList();
+      }
+
+      print(body["error"]);
+
+      return [];
+    } catch (e) {
+      print("Route fetch error: $e");
+
       return [];
     }
-
-    final data = jsonDecode(res.body);
-    final encoded = data["routes"]?[0]?["polyline"]?["encodedPolyline"];
-    if (encoded == null) return [];
-
-    return _decodeGooglePolyline(encoded);
-  }
-
-  /// Decodes the encoded polyline string from Google into a list of LatLng coordinates.
-  static List<LatLng> _decodeGooglePolyline(String encoded) {
-    List<LatLng> polyline = [];
-    int index = 0, lat = 0, lng = 0;
-
-    while (index < encoded.length) {
-      int b, shift = 0, result = 0;
-
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1F) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-
-      int dlat = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1F) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-
-      int dlng = (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
-      lng += dlng;
-
-      polyline.add(LatLng(lat / 1E5, lng / 1E5));
-    }
-
-    return polyline;
-  }
-
-  // ========================================
-  // HERE ROUTING (Custom routing with avoid zones)
-  // ========================================
-
-  /// Fetches a route from HERE Maps, allowing the exclusion of specific geographic areas.
-  static Future<List<LatLng>> _fetchHereRoute(
-      LatLng origin,
-      LatLng destination,
-      List<Map<String, dynamic>> avoidZones,
-      ) async {
-    // Format the avoid parameters if zones (like flood areas) are provided
-    final avoidParam =
-    avoidZones.isNotEmpty ? "&avoid[areas]=${_buildAvoidAreas(avoidZones)}" : "";
-
-    final url =
-        "https://router.hereapi.com/v8/routes"
-        "?transportMode=car"
-        "&origin=${origin.latitude},${origin.longitude}"
-        "&destination=${destination.latitude},${destination.longitude}"
-        "&return=polyline,summary"
-        "$avoidParam"
-        "&apikey=$hereAPIKey";
-
-    final response = await http.get(Uri.parse(url));
-
-    if (response.statusCode != 200) {
-      print("HERE API Error: ${response.body}");
-      return [];
-    }
-
-    final data = jsonDecode(response.body);
-    final poly = data["routes"]?[0]?["sections"]?[0]?["polyline"];
-    if (poly == null) return [];
-
-    // Decode the flexible polyline format used by HERE Maps
-    final List<LatLngZ> decoded = FlexiblePolyline.decode(poly);
-    return decoded.map((p) => LatLng(p.lat, p.lng)).toList();
-  }
-
-  /// Converts a list of circular zones into a bounding box string format for the API.
-  static String _buildAvoidAreas(List<Map<String, dynamic>> zones) {
-    return zones.map((zone) {
-      final bbox = _getBBox(zone["position"], zone["radius"]);
-      return "bbox:${bbox["minLon"]},${bbox["minLat"]},${bbox["maxLon"]},${bbox["maxLat"]}";
-    }).join("|");
-  }
-
-  /// Calculates the bounding box coordinates given a center point and a radius in meters.
-  static Map<String, double> _getBBox(LatLng center, double radius) {
-    double deltaLat = radius / 111000; // Approx meters per degree latitude
-    double deltaLon =
-        radius / (111000 * cos(center.latitude * pi / 180));
-
-    return {
-      "minLat": center.latitude - deltaLat,
-      "maxLat": center.latitude + deltaLat,
-      "minLon": center.longitude - deltaLon,
-      "maxLon": center.longitude + deltaLon,
-    };
   }
 }

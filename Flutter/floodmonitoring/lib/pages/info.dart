@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:floodmonitoring/services/api_configs.dart';
 import 'package:floodmonitoring/services/weather.dart';
 import 'package:floodmonitoring/utils/converters.dart';
 import 'package:floodmonitoring/utils/style.dart';
@@ -17,12 +18,9 @@ class Info extends StatefulWidget {
 }
 
 class _InfoState extends State<Info> {
-
   // ========================================
   // STATE / VARIABLES
   // ========================================
-
-  final blynk = BlynkService();
   Timer? _timer;
 
   List<FlSpot> hourlyData = [];
@@ -40,7 +38,9 @@ class _InfoState extends State<Info> {
     loadSensorHistoryView(sensorViewInfo);
 
     _timer = Timer.periodic(
-        const Duration(seconds: 1), (_) => fetchDataForSensor(sensorViewInfo));
+      const Duration(seconds: 1),
+      (_) => fetchDataForSensor(sensorViewInfo),
+    );
   }
 
   @override
@@ -53,17 +53,9 @@ class _InfoState extends State<Info> {
   // LOGIC / HELPER FUNCTIONS
   // ========================================
 
-
   /// ----- FETCH DATA FOR SENSOR -----
   Future<void> fetchDataForSensor(String sensorId) async {
-    final sensor = sensors[sensorId];
-    if (sensor == null) return;
-
-    final String token = sensor['token'];
-    final String pin = sensor['pin'];
-    final double height = sensor['height'];
-
-    final data = await BlynkService().fetchDistance(token, pin, height);
+    final data = await FloodLevel.fetchLatestSensorData(sensorId);
 
     setState(() {
       sensors[sensorId]!['sensorData'] = data;
@@ -75,8 +67,10 @@ class _InfoState extends State<Info> {
     final sensor = sensors[sensorId];
     if (sensor == null) return;
 
-    final weather =
-    await loadWeather(sensor['position'].latitude, sensor['position'].longitude);
+    final weather = await loadWeather(
+      sensor['position'].latitude,
+      sensor['position'].longitude,
+    );
 
     if (weather != null) {
       setState(() {
@@ -92,25 +86,24 @@ class _InfoState extends State<Info> {
   /// ----- LOAD SENSOR HISTORY VIEW -----
   Future<void> loadSensorHistoryView(String sensorId) async {
     try {
-      String uri = '$serverUri/api/get-sensor-history/';
+      final uri = Uri.parse(
+        ApiConfig.sensorHistory,
+      ).replace(queryParameters: {"id": sensorId});
 
-      var res = await http.post(
-        Uri.parse(uri),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"sensor_id": sensorId}),
-      );
+      var res = await http.get(uri);
 
       var response = jsonDecode(res.body);
 
       if (res.statusCode == 200 && response['success'] == true) {
-        // Map the dynamic list from JSON to FlSpot objects
-        List<FlSpot> fetchedSpots = (response['hourlyData'] as List)
+        final data = response['data'];
+
+        List<FlSpot> fetchedSpots = (data['hourlyData'] as List)
             .map((item) => FlSpot(item['x'].toDouble(), item['y'].toDouble()))
             .toList();
 
         setState(() {
           hourlyData = fetchedSpots;
-          labels = List<String>.from(response['labels']);
+          labels = List<String>.from(data['labels']);
         });
 
         print("History Loaded Successfully");
@@ -119,8 +112,6 @@ class _InfoState extends State<Info> {
       print("Error fetching sensor history: $e");
     }
   }
-
-
 
   // ========================================
   // BUILD / CORE UI
@@ -182,10 +173,11 @@ class _InfoState extends State<Info> {
               Text(
                 title,
                 style: const TextStyle(
-                    fontFamily: 'AvenirNext',
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
+                  fontFamily: 'AvenirNext',
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ],
           ),
@@ -222,13 +214,16 @@ class _InfoState extends State<Info> {
               ),
               const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 10),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 3,
+                  horizontal: 10,
+                ),
                 decoration: BoxDecoration(
                   color: dataStatusColor(),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  (selectedVehicle!.isEmpty)
+                  (selectedVehicle.isEmpty)
                       ? "Pending..."
                       : (sensor['sensorData']['status'] ?? "Unknown"),
                   style: const TextStyle(
@@ -237,7 +232,7 @@ class _InfoState extends State<Info> {
                     fontSize: 12,
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
@@ -273,10 +268,18 @@ class _InfoState extends State<Info> {
       child: Column(
         children: [
           _item(
-              "Flood Height",
-              "${UnitConverter.cmToFeet((sensor['sensorData']['floodHeight'] as num).toDouble()).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')} ft"
+            "Flood Height",
+            "${UnitConverter.cmToFeet((sensor['sensorData']['floodHeight'] as num).toDouble()).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')} ft",
           ),
-          _item("Distance to Water", "${sensor['sensorData']['distance']} cm"),
+          _item('Current Flood Category', sensor['sensorData']['floodCatNow']),
+          _item(
+            "Forecasted Height (5-mins)",
+            "${UnitConverter.cmToFeet((sensor['sensorData']['forecast'] as num).toDouble()).toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '')} ft",
+          ),
+          _item(
+            'Forecasted Flood Category',
+            sensor['sensorData']['floodForecastCat'],
+          ),
           _item(
             "Flood Status",
             (selectedVehicle.isEmpty)
@@ -284,7 +287,7 @@ class _InfoState extends State<Info> {
                 : (sensor['sensorData']['status'] ?? "Unknown"),
             color: dataStatusColor(),
           ),
-          _item("Last Update", sensor['sensorData']['lastUpdate']),
+          _item("Last Update", formatToPHT(sensor['sensorData']['lastUpdate'])),
         ],
       ),
     );
@@ -338,9 +341,14 @@ class _InfoState extends State<Info> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(height: 10),
           child,
         ],
@@ -359,7 +367,10 @@ class _InfoState extends State<Info> {
           Text(
             value,
             style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.bold, color: color ?? Colors.black87),
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: color ?? Colors.black87,
+            ),
           ),
         ],
       ),
@@ -377,29 +388,33 @@ class _InfoState extends State<Info> {
             minX: 0,
             maxX: 23,
             lineTouchData: LineTouchData(
-              getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
-                return spotIndexes.map((index) {
-                  return TouchedSpotIndicatorData(
-                    FlLine(
-                      color: Colors.blueAccent.withOpacity(0.5),
-                      strokeWidth: 2,
-                    ),
-                    FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) =>
-                          FlDotCirclePainter(
-                            radius: 4,
-                            color: Colors.white,
-                            strokeColor: Colors.blueAccent,
-                            strokeWidth: 2,
-                          ),
-                    ),
-                  );
-                }).toList();
-              },
+              getTouchedSpotIndicator:
+                  (LineChartBarData barData, List<int> spotIndexes) {
+                    return spotIndexes.map((index) {
+                      return TouchedSpotIndicatorData(
+                        FlLine(
+                          color: Colors.blueAccent.withOpacity(0.5),
+                          strokeWidth: 2,
+                        ),
+                        FlDotData(
+                          show: true,
+                          getDotPainter: (spot, percent, barData, index) =>
+                              FlDotCirclePainter(
+                                radius: 4,
+                                color: Colors.white,
+                                strokeColor: Colors.blueAccent,
+                                strokeWidth: 2,
+                              ),
+                        ),
+                      );
+                    }).toList();
+                  },
               touchTooltipData: LineTouchTooltipData(
                 getTooltipColor: (touchedSpot) => Colors.white,
-                tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                tooltipPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 tooltipMargin: 10,
                 getTooltipItems: (List<LineBarSpot> touchedSpots) {
                   return touchedSpots.map((LineBarSpot touchedSpot) {
@@ -454,8 +469,12 @@ class _InfoState extends State<Info> {
               ),
             ),
             titlesData: FlTitlesData(
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,

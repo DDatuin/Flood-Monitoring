@@ -1,18 +1,10 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-
-
-const String serverUri = "https://yeasty-rikki-nonchivalrously.ngrok-free.dev";
-
 /// API KEYS
 const String googleMapAPIKey = "AIzaSyAMamxCz-N-wiGSq4-DfVpD9zOpP_GZ_9o";
 const String hereAPIKey = "TiHkVyYjkDXokfAstiAx97Iqttb-eqUTd1vCq1aiqhE";
-//const String mapboxAPIKey = "pk.eyJ1IjoidmluY2VudGplcnJ5anVhbmljbyIsImEiOiJjbWlyanl6MDMwMmRuM2NzZnAzZWRtMGRzIn0.8zbipe-6rXc1C5u0fP15aQ";
-const String weatherAPIKey = 'dfa37345e5d4c1fa93dcb18d17f07643';
 
 /// Testing mode
 bool testingMode = false;
@@ -29,77 +21,39 @@ String sensorViewInfo = "";
 bool searchStartLocation = false;
 bool searchEndLocation = false;
 
-
-
 final List<Map<String, dynamic>> floodStatuses = [
   {
     "text": "Safe",
     "color": const Color(0xFF4CAF50), // Green
     "icon": Icons.check_circle,
-    "message": "No flooding detected."
+    "message": "No flooding detected.",
   },
   {
     "text": "Warning",
     "color": const Color(0xFFFFC107), // Yellow
     "icon": Icons.warning_amber_rounded,
-    "message": "Rising water level, stay alert."
+    "message": "Rising water level, stay alert.",
   },
   {
     "text": "Danger",
     "color": const Color(0xFFF44336), // Red
     "icon": Icons.error,
-    "message": "Flooding likely, move to higher ground."
+    "message": "Flooding likely, move to higher ground.",
   },
 ];
 
-
 Map<String, Map<String, dynamic>> sensors = {
-  "sensor_01": { //Near basketball Court
+  "SENS_001": {
+    //Near basketball Court
     "position": const LatLng(14.601570218473059, 121.00789117225852),
     "token": "rDsIi--IkEDcdOVLSBXh2DvfusmwPSFc",
     "pin": "V0",
-    "radius": 100.0, /// Meters
-    "height": 100.00, /// cm
-    "location": "No Location",
-    "sensorData": {
-      "distance": 0.0,
-      "floodHeight": 0.0,
-      "status": "Loading...",
-      "lastUpdate": "00:00 AM",
-    },
-    "weatherData": {
-      "temperature": 0.0,
-      "description": "Loading...",
-      "pressure": 0,
-    }
-  },
-
-  "sensor_02": {
-    "position": const LatLng(14.599904842697908, 121.00901626016662),
-    "token": "rDsIi--IkEDcdOVLSBXh2DvfusmwPSFc",
-    "pin": "V1",
     "radius": 100.0,
-    "height": 100.00,
-    "location": "No Location",
-    "sensorData": {
-      "distance": 0.0,
-      "floodHeight": 0.0,
-      "status": "Loading...",
-      "lastUpdate": "00:00 AM",
-    },
-    "weatherData": {
-      "temperature": 0.0,
-      "description": "Loading...",
-      "pressure": 0,
-    }
-  },
 
-  "sensor_03": {
-    "position": const LatLng(14.600046597692646, 121.00933305621841),
-    "token": "rDsIi--IkEDcdOVLSBXh2DvfusmwPSFc",
-    "pin": "V2",
-    "radius": 100.0,
+    /// Meters
     "height": 100.00,
+
+    /// cm
     "location": "No Location",
     "sensorData": {
       "distance": 0.0,
@@ -111,11 +65,9 @@ Map<String, Map<String, dynamic>> sensors = {
       "temperature": 0.0,
       "description": "Loading...",
       "pressure": 0,
-    }
+    },
   },
 };
-
-
 
 /// Link: https://interaksyon.philstar.com/trends-spotlights/2024/09/04/282826/mmda-flood-gauge-system-travelers-motorists/amp/
 /// Link: https://www.carmudi.com.ph/journal/5-tips-gauge-safe-drive-flood/
@@ -128,6 +80,12 @@ List<Map<String, dynamic>> vehicleFloodThresholds = [
     "warningRange_cm": [25.5, 48.26],
     // 19.1" above (Tire level and higher)
     "dangerRange_cm": [48.27, double.infinity],
+  },
+  {
+    "vehicle": "Pedestrian",
+    "safeRange_cm": [0.0, 5.08],
+    "warningRange_cm": [5.09, 12.7],
+    "dangerRange_cm": [12.7, double.infinity],
   },
   {
     "vehicle": "Bicycle",
@@ -161,6 +119,3 @@ List<Map<String, dynamic>> vehicleFloodThresholds = [
     "dangerRange_cm": [66.05, double.infinity],
   },
 ];
-
-
-

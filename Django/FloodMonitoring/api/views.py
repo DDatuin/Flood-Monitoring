@@ -1,210 +1,479 @@
-from rest_framework.views import APIView
+import json
+
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import generics
-from django.utils import timezone
-from django.shortcuts import get_object_or_404
-from django.db.models import Avg
-from django.db.models.functions import TruncHour, TruncDay, TruncMonth
-from dateutil.relativedelta import relativedelta
-from datetime import timedelta
-from .models import EmergencyContact, VehicleFloodThreshold, Sensor, SensorData
-from .serializers import ( 
-    VehicleThresholdSerializer, 
-    SensorSerializer,
-    EmergencyContactSerializer,
-    SensorDataSerializer,
-)
 
-# Serializer for VehicleFloodThreshold 
-class VehicleThresholdList(generics.ListCreateAPIView):
-    queryset = VehicleFloodThreshold.objects.all()
-    serializer_class = VehicleThresholdSerializer
-
-# Serializer for Sensor
-class SensorList(generics.ListCreateAPIView):
-    queryset = Sensor.objects.all()
-    serializer_class = SensorSerializer
-
-# Serializer for SensorData
-class SensorDataList(generics.ListCreateAPIView):
-    queryset = SensorData.objects.all()
-    serializer_class = SensorDataSerializer
-
-# Serializer for EmergencyContact
-class EmergencyContactList(generics.ListCreateAPIView):
-    queryset = EmergencyContact.objects.all()
-    serializer_class = EmergencyContactSerializer
+from api.utils import api_response, build_avoid_polygons, clean_route_response, normalize_avoid_zones, safe_float
+from .supabase.utils import get_emergency_contacts_from_supabase, get_latest_data_from_supabase, get_latest_sensor_wl_data_from_supabase, get_sensor_history_from_supabase, get_specific_sensor_details_from_supabase, get_vehicle_thresholds_from_supabase, get_web_chart_data_from_supabase
+import requests, os
 
 
-# API views to return all data in one request
-class AllSensorData(APIView):
-    def get(self, request):
-        sensors = Sensor.objects.all()
-        serializer = SensorSerializer(sensors, many=True)
-        return Response({
-            "success": True, 
-            "sensors": serializer.data
-        })
+@api_view(['GET'])
+def get_latest_data(request): 
 
-# API views to return all data in one request
-class AllThresholdData(APIView):
-    def get(self, request):
-        thresholds = VehicleFloodThreshold.objects.all()
-        serializer = VehicleThresholdSerializer(thresholds, many=True)
-        return Response({
-            "success": True, 
-            "thresholds": serializer.data
-        })
+    """
+    REQUEST:
+    /api/latest-data/
+    """
 
-# API views to return all data in one request    
-class AllEmergencyContactData(APIView):
-    def get(self, request):
-        contacts = EmergencyContact.objects.all()
-        serializer = EmergencyContactSerializer(contacts, many=True)
-        return Response({
-            "success": True, 
-            "emergencyContacts": serializer.data
-        })
+    latest_sensor_data = get_latest_data_from_supabase()
 
-# API view to get sensor history for the past 24 hours
-class GetSensorHistory(APIView):
-    def post(self, request):
-        sensor_id = request.data.get('sensor_id')
-        sensor = get_object_or_404(Sensor, sensor_id=sensor_id)
-        sensor_height_cm = sensor.height * 100 
+    result = {}
 
-        now_local = timezone.localtime(timezone.now())
-        end_time = now_local.replace(minute=0, second=0, microsecond=0)
-        start_time = end_time - timedelta(hours=23)
+    for row in latest_sensor_data:
+        sensor_id = row["sensor_id"]
 
-        data_query = SensorData.objects.filter(
-            sensor_id=sensor_id,
-            timestamp__range=(start_time, end_time)
-        ).values('timestamp', 'water_level')
+        details = get_specific_sensor_details_from_supabase(sensor_id)
 
-        hourly_totals = {} 
-        
-        for entry in data_query:
-            local_ts = timezone.localtime(entry['timestamp'])
-            hour_key = local_ts.strftime('%Y-%m-%d %H:00')
-            
-            if hour_key not in hourly_totals:
-                hourly_totals[hour_key] = []
-            hourly_totals[hour_key].append(float(entry['water_level'] or 0.0))
+        prediction = row.get("prediction") or {}
 
-        history_map = {
-            key: sum(val_list) / len(val_list) 
-            for key, val_list in hourly_totals.items()
-        }
-        
-        spots = []
-        labels = [] 
-        
-        for i in range(24):
-            current_slot = start_time + timedelta(hours=i)
-            slot_str = current_slot.strftime('%Y-%m-%d %H:00')
-            
-            time_label = current_slot.strftime('%b %d, %H:%M') 
-            labels.append(time_label)
+        result[sensor_id] = {
+            #datapoint-specific details
+            "datetime": row["timestamp"],
 
-            distance_to_water = history_map.get(slot_str, sensor_height_cm)
-            flood_height_cm = max(0, sensor_height_cm - distance_to_water)
-            level_in_feet = round(flood_height_cm / 30.48, 2)
-            
-            spots.append({"x": float(i), "y": level_in_feet})
+            #sensor-specific details
+            "latlong": details['latlong'],
+            "ground_distance": details['ground_distance'],
+            "radius": details['radius'],
+            "location_name": details['location_name'],
 
-        return Response({
-            "success": True,
-            "labels": labels, 
-            "hourlyData": spots
-        })
+            #flood-info-specific details
+            "wlvl_now": row.get("wlvl_now"),
+            "flood_cat_now": row.get("flood_cat_now"),
+            "forecast": prediction.get("forecast"),
+            "flood_cat": prediction.get("forecast_category"),
 
-# API view to get web chart data for selected sensor and time range
-class GetWebChartData(APIView):
-    def post(self, request):
-        sensor_id = request.data.get('sensor_id') 
-        time_range = request.data.get('range', 'hour') 
-        
-        now = timezone.localtime(timezone.now())
-        
-        if time_range == 'year':
-            start_time = (now - relativedelta(months=11)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            slots = 12
-        elif time_range == 'month':
-            start_time = (now - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0)
-            slots = 31
-        elif time_range == 'week':
-            start_time = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
-            slots = 8
-        elif time_range == 'day':
-            start_time = (now - timedelta(hours=23)).replace(minute=0, second=0, microsecond=0)
-            slots = 24
-        else: # hour
-            base_now = now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0)
-            start_time = base_now - timedelta(minutes=55)
-            slots = 12
-
-        query = SensorData.objects.filter(timestamp__range=(start_time, now))
-        if sensor_id != 'all':
-            query = query.filter(sensor_id=sensor_id)
-            sensors = Sensor.objects.filter(sensor_id=sensor_id)
-        else:
-            sensors = Sensor.objects.all()
-
-        raw_data = query.values('sensor_id', 'timestamp', 'water_level')
-        history_totals = {} 
-
-        for entry in raw_data:
-            local_ts = timezone.localtime(entry['timestamp'])
-            s_id = entry['sensor_id']
-            
-            if time_range == 'year':
-                bucket_dt = local_ts.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            elif time_range in ['month', 'week']:
-                bucket_dt = local_ts.replace(hour=0, minute=0, second=0, microsecond=0)
-            elif time_range == 'day':
-                bucket_dt = local_ts.replace(minute=0, second=0, microsecond=0)
-            else: # hour
-                minute_bucket = (local_ts.minute // 5) * 5
-                bucket_dt = local_ts.replace(minute=minute_bucket, second=0, microsecond=0)
-            
-            key = (s_id, bucket_dt.isoformat())
-            if key not in history_totals:
-                history_totals[key] = []
-            history_totals[key].append(float(entry['water_level'] or 0.0))
-
-        history_map = {
-            key: sum(val_list) / len(val_list) 
-            for key, val_list in history_totals.items()
+            #weather-specific details
+            "temperature": row.get("temperature"),
+            "pressure": row.get("pressure"),
+            "description": row.get("description")
         }
 
-        datasets = []
-        for s in sensors:
-            sensor_height_cm = float(s.height) * 100
-            points = []
-            
-            for i in range(slots):
-                if time_range == 'year':
-                    current_slot = start_time + relativedelta(months=i)
-                elif time_range in ['month', 'week']:
-                    current_slot = start_time + timedelta(days=i)
-                elif time_range == 'day':
-                    current_slot = start_time + timedelta(hours=i)
-                else: # hour
-                    current_slot = start_time + timedelta(minutes=i*5)
-                
-                slot_str = current_slot.isoformat()
-                
-                dist_to_water = history_map.get((s.sensor_id, slot_str), sensor_height_cm)
-                
-                flood_cm = max(0, sensor_height_cm - dist_to_water)
-                level_ft = round(flood_cm / 30.48, 2)
-                
-                points.append({"x": slot_str, "y": level_ft})
-            
-            datasets.append({
-                "label": f"{s.sensor_id} ({s.location_name})",
-                "data": points
+    return api_response(
+        success=True,
+        data= result,
+        message="Latest Sensor Data Retrieved"
+    )
+
+@api_view(['GET'])
+def get_latest_specific_sensor_water_level_data(request):
+    """
+    REQUEST:
+    /api/latest-specific?id=<sensor_id>
+    """
+
+    sensor_id = request.GET.get("id")
+
+    if not sensor_id:
+        return api_response(
+            success=False,
+            data=None,
+            message="Missing sensor_id",
+            status=400
+        )
+
+    data = get_latest_sensor_wl_data_from_supabase(sensor_id)
+
+    if not data:
+        return api_response(
+            success=False,
+            data=None,
+            message="No data found for sensor",
+            status=404
+        )
+
+    prediction = data.get("prediction") or {}
+
+    result = {
+        "wlvl_now": data.get("wlvl_now"),
+        "flood_cat_now": data.get("flood_cat_now"),
+        "forecast": prediction.get("forecast"),
+        "flood_cat": prediction.get("forecast_category"),
+        "lastUpdate": data.get("timestamp"),
+    }
+
+    return api_response(
+        success=True,
+        data=result,
+        message="Latest Sensor Data Retrieved"
+    )
+
+@api_view(['GET'])
+def get_vehicle_thresholds(request):
+
+    raw = get_vehicle_thresholds_from_supabase()
+
+    return api_response(
+        success=True,
+        data=raw,
+        message="Vehicle thresholds retrieved"
+    )
+
+@api_view(['GET'])
+def get_emergency_contacts(request):
+    """
+    REQUEST:
+    /api/emergency/
+    """    
+
+    raw = get_emergency_contacts_from_supabase()
+
+    return api_response(
+        success=True,
+        data=raw,
+        message="Emergency Contacts retrieved"
+    )
+
+@api_view(['GET'])
+def forward_geocode(request):#unused in flutter app, use this to switch to a more open-source api service
+    """
+    REQUEST:
+    /api/location-search?q=<place_name>&viewbox=<optional>
+    """
+
+    query = request.GET.get("q")
+    viewbox = request.GET.get("viewbox")
+
+    nominatim_email = os.getenv("NOMINATIM_EMAIL")
+
+    if not query:
+        return api_response(
+            success=False,
+            error="query parameter 'q' is required",
+            status=400
+        )
+
+    url = "https://nominatim.openstreetmap.org/search"
+
+    params = {
+        "q": query,
+        "format": "json",
+        "limit": 10,
+        "addressdetails": 1,
+    }
+
+    if viewbox:
+        params["viewbox"] = viewbox
+        params["bounded"] = 1
+
+    headers = {
+        "User-Agent": f"Flood Detect Waze/1.0 ({nominatim_email})"
+    }
+
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        if not data:
+            return Response({"error": "location not found"}, status=404)
+
+        results = [
+            {
+                "lat": item.get("lat"),
+                "lon": item.get("lon"),
+                "display_name": item.get("display_name"),
+                "address": item.get("address")
+            }
+            for item in data
+        ]
+
+        return api_response(
+            success=True,
+            data={
+                "query": query,
+                "results": results
+            },
+            message="Location results found"
+        )
+
+    except Exception as e:
+        return api_response(
+            success=False,
+            error=str(e),
+            status=500
+        )
+    
+@api_view(['GET'])
+def get_sensor_history(request):
+    """
+    REQUEST:
+    /api/history?id=<sensor_id>
+    """
+
+    sensor_id = request.GET.get('id')
+
+    if not sensor_id:
+        return api_response(
+            success=False,
+            error="Missing sensor id",
+            status=400
+        )
+
+    result = get_sensor_history_from_supabase(sensor_id)
+
+    return api_response(
+        success=True,
+        data=result,
+        message="Sensor history retrieved"
+    )
+
+@api_view(['GET'])
+def get_web_chart_history(request):
+    """
+    REQUEST:
+    /api/web-history?id=<sensor_id>
+    """
+    sensor_id = request.GET.get("id", "all")
+    time_range = request.GET.get("range", "hour")
+
+    result = get_web_chart_data_from_supabase(
+        sensor_id,
+        time_range
+    )
+
+    return api_response(
+        success=True,
+        data=result,
+        message="Chart data retrieved"
+    )
+
+@api_view(['POST'])
+def get_safe_route(request):
+    try:
+        body = request.data
+        print("RAW BODY:", body)
+
+        start = body.get("start")
+        end = body.get("end")
+        vehicle = body.get("vehicle", "driving-car")
+
+        if not start or not end:
+            return api_response(False, error="start/end required", status=400)
+
+        avoid_zones = normalize_avoid_zones(body.get("avoid_zones", []))
+        print("NORMALIZED ZONES:", avoid_zones)
+
+        avoid_polygons = build_avoid_polygons(avoid_zones)
+        print("POLYGONS:", avoid_polygons)
+
+        payload = {
+            "coordinates": [
+                [start[1], start[0]],
+                [end[1], end[0]]
+            ]
+        }
+
+        if avoid_polygons:
+            payload["options"] = {
+                "avoid_polygons": {
+                    "type": "MultiPolygon",
+                    "coordinates": avoid_polygons
+                }
+            }
+
+        print("FINAL ORS PAYLOAD:", json.dumps(payload, indent=2))
+
+        response = requests.post(
+            f"https://api.openrouteservice.org/v2/directions/{vehicle}/geojson",
+            json=payload,
+            headers={
+                "Authorization": os.getenv("ORS_API_KEY"),
+                "Content-Type": "application/json"
+            },
+            timeout=15
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+        coords = data["features"][0]["geometry"]["coordinates"]
+
+        return api_response(
+            True,
+            data={"coordinates": coords},
+            message="Route generated successfully"
+        )
+
+    except Exception as e:
+        return api_response(False, error=str(e), status=500)
+
+@api_view(['GET'])
+def get_user_weather_info(request):
+
+    try:
+        latitude = request.GET.get("latitude")
+        longitude = request.GET.get("longitude")
+
+        if latitude is None or longitude is None:
+            return api_response(
+                success=False,
+                error="latitude and longitude are required",
+                status=400
+            )
+
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except ValueError:
+            return api_response(
+                success=False,
+                error="latitude and longitude must be valid numbers",
+                status=400
+            )
+
+        url = "https://api.openweathermap.org/data/2.5/weather"
+
+        params = {
+            "lat": latitude,
+            "lon": longitude,
+            "appid": os.getenv("OPENWEATHER_KEY"),
+            "units": "metric"
+        }
+
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        weather = (data.get("weather") or [{}])[0]
+
+        result = {
+            "temperature": data.get("main", {}).get("temp", 0.0),
+            "description": weather.get("description", "N/A").title(),
+            "pressure": data.get("main", {}).get("pressure", 0),
+            "iconCode": weather.get("icon", "")
+        }
+
+        return api_response(
+            success=True,
+            data=result,
+            message="Weather fetched successfully"
+        )
+    
+    except Exception as e:
+        return api_response(
+            success=False,
+            error=f"Unexpected error: {str(e)}",
+            status=500
+        )
+    
+@api_view(['GET'])
+def search_places(request):
+
+    query = request.GET.get("q")
+
+    if not query:
+        return api_response(
+            success=False,
+            error="Missing query parameter",
+            status=400
+        )
+
+    url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+
+    params = {
+        "input": query,
+        "components": "country:PH",
+        "key": os.getenv("GOOGLEMAPS_API_KEY")
+    }
+
+    try:
+
+        response = requests.get(
+            url,
+            params=params,
+            timeout=10
+        )
+
+        response.raise_for_status()
+
+        json_data = response.json()
+
+        results = []
+
+        for item in json_data.get("predictions", []):
+
+            results.append({
+                "place_id": item.get("place_id"),
+                "name": item.get(
+                    "structured_formatting",
+                    {}
+                ).get("main_text"),
+
+                "description": item.get("description")
             })
 
-        return Response({"success": True, "datasets": datasets})
+        return api_response(
+            success=True,
+            data=results,
+            message="Places retrieved"
+        )
+
+    except Exception as e:
+
+        return api_response(
+            success=False,
+            error=str(e),
+            status=500
+        )
+    
+@api_view(['GET'])
+def get_place_details(request):
+
+    place_id = request.GET.get("id")
+
+    if not place_id:
+
+        return api_response(
+            success=False,
+            error="Missing place id",
+            status=400
+        )
+
+    url = "https://maps.googleapis.com/maps/api/place/details/json"
+
+    params = {
+        "place_id": place_id,
+        "fields": "geometry,name",
+        "key": os.getenv("GOOGLEMAPS_API_KEY")
+    }
+
+    try:
+
+        response = requests.get(
+            url,
+            params=params,
+            timeout=10
+        )
+
+        response.raise_for_status()
+
+        json_data = response.json()
+
+        result = json_data.get("result", {})
+
+        geometry = result.get("geometry", {})
+        location = geometry.get("location", {})
+
+        data = {
+            "name": result.get("name"),
+            "latlong": [
+                location.get("lat"),
+                location.get("lng")
+            ]
+        }
+
+        return api_response(
+            success=True,
+            data=data,
+            message="Place details retrieved"
+        )
+
+    except Exception as e:
+
+        return api_response(
+            success=False,
+            error=str(e),
+            status=500
+        )

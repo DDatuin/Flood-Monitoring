@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:floodmonitoring/services/global.dart';
+import 'package:floodmonitoring/services/api_configs.dart';
 import 'package:floodmonitoring/utils/style.dart';
 import 'package:flutter/material.dart';
 import 'package:floodmonitoring/widgets/custom_app_bar.dart';
@@ -15,8 +15,6 @@ class RescueCall extends StatefulWidget {
 }
 
 class _RescueCallState extends State<RescueCall> {
-
-
   // ========================================
   // INITIALIZATION (initState)
   // ========================================
@@ -36,40 +34,39 @@ class _RescueCallState extends State<RescueCall> {
     {
       "name": "Manila DRRMO (Main)",
       "number": "09507003710",
-      "description": "City-wide flood rescue & emergency response"
+      "description": "City-wide flood rescue & emergency response",
     },
     {
       "name": "Manila City Hall Action Center",
       "number": "89271335",
-      "description": "General emergency & flood reports"
+      "description": "General emergency & flood reports",
     },
     {
       "name": "Philippine Red Cross (Manila)",
       "number": "143",
-      "description": "Direct emergency hotline (Shortcode)"
+      "description": "Direct emergency hotline (Shortcode)",
     },
     {
       "name": "MMDA Flood Control",
       "number": "136",
-      "description": "Metro-wide flood monitoring & rescue"
+      "description": "Metro-wide flood monitoring & rescue",
     },
     {
       "name": "BFP Manila (Fire/Rescue)",
       "number": "85273627",
-      "description": "Bureau of Fire Protection - Manila District"
+      "description": "Bureau of Fire Protection - Manila District",
     },
     {
       "name": "PNP Santa Mesa (Station 6)",
       "number": "87160601",
-      "description": "Local police assistance in Santa Mesa"
+      "description": "Local police assistance in Santa Mesa",
     },
     {
       "name": "National Emergency Hotline",
       "number": "911",
-      "description": "Centralized emergency hotline"
+      "description": "Centralized emergency hotline",
     },
   ];
-
 
   // ========================================
   // LOGIC / HELPER FUNCTIONS
@@ -78,26 +75,27 @@ class _RescueCallState extends State<RescueCall> {
   /// ----- LOAD EMERGENCY CONTACTS -----
   Future<void> loadEmergencyContacts() async {
     try {
-      String uri = '$serverUri/api/get-all-contacts/';
-
-      var res = await http.get(
-          Uri.parse(uri),
-          headers: {"Content-Type": "application/json"}
-      );
-
+      var res = await http.get(Uri.parse(ApiConfig.emergencyContacts));
       var response = jsonDecode(res.body);
 
-      if (res.statusCode == 200 && response.containsKey("emergencyContacts")) {
+      if (res.statusCode == 200 && response["data"] != null) {
+        final data = response["data"];
+
         setState(() {
           emergencyContacts = List<Map<String, String>>.from(
-              response["emergencyContacts"].map((item) => {
+            data.map(
+              (item) => {
                 "name": item["name"].toString(),
                 "number": item["phone_number"].toString(),
                 "description": item["description"].toString(),
-              })
+              },
+            ),
           );
         });
+
         print("Contacts updated: ${emergencyContacts.length} items loaded.");
+      } else {
+        print("API returned invalid response: ${response.toString()}");
       }
     } catch (e) {
       print("Error fetching emergency contacts: $e");
@@ -116,7 +114,6 @@ class _RescueCallState extends State<RescueCall> {
       );
     }
   }
-
 
   // ========================================
   // BUILD / CORE UI
@@ -139,7 +136,9 @@ class _RescueCallState extends State<RescueCall> {
             const SizedBox(height: 10),
             _header(),
             const SizedBox(height: 20),
-            ...emergencyContacts.map((contact) => _contactCard(contact)).toList(),
+            ...emergencyContacts
+                .map((contact) => _contactCard(contact))
+                .toList(),
           ],
         ),
       ),
@@ -149,7 +148,6 @@ class _RescueCallState extends State<RescueCall> {
   // ========================================
   // UI WIDGETS
   // ========================================
-
 
   /// ----- HEADER -----
   Widget _header() {
@@ -242,8 +240,10 @@ class _RescueCallState extends State<RescueCall> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorPrimary,
                   foregroundColor: Colors.white,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

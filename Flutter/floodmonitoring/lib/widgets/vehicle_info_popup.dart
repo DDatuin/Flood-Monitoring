@@ -4,13 +4,12 @@ import 'package:floodmonitoring/utils/style.dart';
 import 'package:flutter/material.dart';
 
 class VehicleInfoPopup {
-
   static void show(
-      BuildContext context,
-      String vehicleName, {
-        Function(String selectedVehicle)? onConfirm,
-        Function(String selectedVehicle)? onCancel,
-      }) {
+    BuildContext context,
+    String vehicleName, {
+    Function(String selectedVehicle)? onConfirm,
+    Function(String selectedVehicle)? onCancel,
+  }) {
     final data = _getVehicleData[vehicleName];
     if (data == null) return;
 
@@ -24,7 +23,10 @@ class VehicleInfoPopup {
           onWillPop: () async => false,
           child: Dialog(
             backgroundColor: Colors.transparent,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 40,
+            ),
             child: StatefulBuilder(
               builder: (context, setState) {
                 return Container(
@@ -79,7 +81,10 @@ class VehicleInfoPopup {
                       if (vehicleName == "Bicycle") ...[
                         const Text(
                           "Select Type",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -114,7 +119,10 @@ class VehicleInfoPopup {
                       if (vehicleName == "Motorcycle") ...[
                         const Text(
                           "Select Type",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -295,37 +303,49 @@ class VehicleInfoPopup {
     // Helper to find threshold by vehicle name
     Map<String, dynamic> findThreshold(String name) {
       return vehicleFloodThresholds.firstWhere(
-            (element) => element["vehicle"] == name,
+        (element) => element["vehicle"] == name,
         orElse: () => vehicleFloodThresholds.first,
       );
     }
 
+    final pedestrianT = findThreshold("Pedestrian");
     final bicycleT = findThreshold("Bicycle");
     final motorcycleT = findThreshold("Motorcycle");
     final carT = findThreshold("Car");
     final truckT = findThreshold("Truck");
 
     return {
+      "Pedestrian": _VehicleFloodInfo(
+        description:
+            "Pedestrians are highly vulnerable during floods. Fast-moving or even shallow floodwaters can cause slips, falls, or being swept away. Walking through flooded areas should be avoided whenever possible.",
+        safe: _formatRange(pedestrianT["safeRange_cm"]),
+        warning: _formatRange(pedestrianT["warningRange_cm"]),
+        danger: _formatRange(pedestrianT["dangerRange_cm"]),
+      ),
       "Bicycle": _VehicleFloodInfo(
-        description: "Bicycles are extremely vulnerable to flooding. Even shallow water can affect balance, braking, and visibility. Riding through flooded areas is highly risky and should be avoided.",
+        description:
+            "Bicycles are extremely vulnerable to flooding. Even shallow water can affect balance, braking, and visibility. Riding through flooded areas is highly risky and should be avoided.",
         safe: _formatRange(bicycleT["safeRange_cm"]),
         warning: _formatRange(bicycleT["warningRange_cm"]),
         danger: _formatRange(bicycleT["dangerRange_cm"]),
       ),
       "Motorcycle": _VehicleFloodInfo(
-        description: "Motorcycles are very vulnerable to floods even at low levels. Unlike cars and trucks, they can easily lose balance or submerge. Extra caution is needed when riding in flood-prone areas.",
+        description:
+            "Motorcycles are very vulnerable to floods even at low levels. Unlike cars and trucks, they can easily lose balance or submerge. Extra caution is needed when riding in flood-prone areas.",
         safe: _formatRange(motorcycleT["safeRange_cm"]),
         warning: _formatRange(motorcycleT["warningRange_cm"]),
         danger: _formatRange(motorcycleT["dangerRange_cm"]),
       ),
       "Car": _VehicleFloodInfo(
-        description: "Cars can normally withstand floods that are below the door step. They are less vulnerable than motorcycles but may still be at risk if water rises higher than the engine level.",
+        description:
+            "Cars can normally withstand floods that are below the door step. They are less vulnerable than motorcycles but may still be at risk if water rises higher than the engine level.",
         safe: _formatRange(carT["safeRange_cm"]),
         warning: _formatRange(carT["warningRange_cm"]),
         danger: _formatRange(carT["dangerRange_cm"]),
       ),
       "Truck": _VehicleFloodInfo(
-        description: "Trucks can handle large floods because of their size and higher chassis. They are the safest among common vehicles in deep water, but caution is still advised in extreme flood conditions.",
+        description:
+            "Trucks can handle large floods because of their size and higher chassis. They are the safest among common vehicles in deep water, but caution is still advised in extreme flood conditions.",
         safe: _formatRange(truckT["safeRange_cm"]),
         warning: _formatRange(truckT["warningRange_cm"]),
         danger: _formatRange(truckT["dangerRange_cm"]),

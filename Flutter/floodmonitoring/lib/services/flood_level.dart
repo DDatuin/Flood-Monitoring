@@ -1,70 +1,61 @@
+import 'dart:convert';
 import 'package:floodmonitoring/services/global.dart';
-import 'package:floodmonitoring/services/time.dart';
 import 'package:http/http.dart' as http;
+import 'package:floodmonitoring/services/api_configs.dart';
+import 'package:floodmonitoring/services/time.dart';
 
-/// Service to handle data retrieval from the Blynk IoT platform and calculate flood levels.
-class BlynkService {
-  Future<Map<String, dynamic>> fetchDistance(
-      String token,
-      String pin,
-      double height,
-      ) async {
+class FloodLevel {
+  static Future<Map<String, dynamic>> fetchLatestSensorData(
+    String sensorId,
+  ) async {
     try {
-      // Construct the API URL for the specific Blynk device and virtual pin
-      final url = Uri.parse(
-        'https://blynk.cloud/external/api/get?token=$token&pin=$pin',
-      );
+      final uri = Uri.parse(
+        ApiConfig.latestSpecific,
+      ).replace(queryParameters: {"id": sensorId});
 
-      final response = await http.get(url);
+      final response = await http.get(uri);
 
-      if (response.statusCode == 200) {
-        final body = response.body.trim();
-        final measuredDistance = double.tryParse(body);
+      final body = jsonDecode(response.body);
+      print("latest sensor data in flood_level.dart: ${body}");
 
-        if (measuredDistance != null) {
-          // Calculate the actual flood height by subtracting sensor distance from total sensor height
-          // Since measuredDistance is a CM then we need to convert height from M to CM as well
-          double floodHeight = (height * 100) - measuredDistance;
+      if (response.statusCode == 200 && body["success"] == true) {
+        final data = body["data"];
 
-          // Prevent negative values if the water is below the expected ground level
-          if (floodHeight < 0) floodHeight = 0;
+        final floodHeight = (data["wlvl_now"] ?? 0).toDouble();
 
-          // Determine the safety status and get the current timestamp
-          final status = getStatusText(floodHeight);
-          final lastUpdate = getCurrentTime();
+        final status = getStatusText(floodHeight);
 
-          return {
-            "distance": measuredDistance,
-            "floodHeight": floodHeight,
-            "status": status,
-            "lastUpdate": lastUpdate,
-          };
-        } else {
-          throw Exception("Invalid data format: $body");
-        }
+        return {
+          "floodHeight": floodHeight,
+          "floodCatNow": data["flood_cat_now"].toString(),
+          "forecast": double.parse(data["forecast"].toString()),
+          "floodForecastCat": data["flood_cat"].toString(),
+          "status": status,
+          "lastUpdate": data["lastUpdate"].toString(),
+        };
       } else {
-        throw Exception("Failed to fetch data: ${response.statusCode}");
+        throw Exception(body["error"] ?? "Failed to fetch data");
       }
     } catch (e) {
-      print("❌ Error fetching distance: $e");
+      print("Error fetching latest sensor data: $e");
+
       return {
-        "distance": null,
         "floodHeight": null,
+        "floodCatNow": "-",
+        "forecast": null,
+        "floodForecastCat": "-",
         "status": "Error",
         "lastUpdate": getCurrentTime(),
       };
     }
   }
 
-  /// Determines if the current flood height is Safe, Warning, or Danger based on the selected vehicle.
-  String getStatusText(double floodHeightCm) {
-    // Retrieve the specific thresholds for the currently selected vehicle type
+  static String getStatusText(double floodHeightCm) {
     final vehicleThreshold = vehicleFloodThresholds.firstWhere(
-          (v) => v["vehicle"] == selectedVehicle,
+      (v) => v["vehicle"] == selectedVehicle,
       orElse: () => vehicleFloodThresholds[0],
     );
 
-    // Compare flood height against vehicle-specific safety ranges
     if (floodHeightCm <= vehicleThreshold["safeRange_cm"][1]) {
       return 'Safe';
     } else if (floodHeightCm <= vehicleThreshold["warningRange_cm"][1]) {

@@ -1,55 +1,49 @@
 import 'dart:convert';
+import 'package:floodmonitoring/services/api_configs.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'global.dart';
 
-/// Service responsible for fetching sensor metadata and configurations from the backend.
 class SensorService {
   Future<Map<String, Map<String, dynamic>>> loadSensorsList() async {
     try {
-      // API endpoint to retrieve all registered sensor devices
-      String uri = '$serverUri/api/get-all-sensors/';
-      var res = await http.get(
-        Uri.parse(uri),
-        headers: {"Content-Type": "application/json"},
-      );
+      var res = await http.get(Uri.parse(ApiConfig.latestData));
 
       var response = jsonDecode(res.body);
+
       Map<String, Map<String, dynamic>> tempSensors = {};
 
-      // Check if the request was successful and contains valid data
       if (res.statusCode == 200 && response["success"] == true) {
-        for (var item in response["sensors"]) {
-          String sId = item["sensor_id"].toString();
+        final data = response["data"];
 
-          // Map raw API data into a structured format for the application state
-          tempSensors[sId] = {
+        data.forEach((sensorId, item) {
+          tempSensors[sensorId] = {
             "position": LatLng(
-              double.parse(item["latitude"].toString()),
-              double.parse(item["longitude"].toString()),
+              double.parse(item["latlong"][0].toString()),
+              double.parse(item["latlong"][1].toString()),
             ),
-            "token": item["token"].toString(),
-            "pin": item["pin"].toString(),
             "radius": double.parse(item["radius"].toString()),
-            "height": double.parse(item["height"].toString()),
-            "location": item["location_name"],
+            "height": double.parse(item["ground_distance"].toString()),
+            "location": item["location_name"].toString(),
 
             // Initialize sensor metrics with placeholder "Loading" values
             "sensorData": {
               "distance": 0.0,
-              "floodHeight": 0.0,
+              "floodHeight": double.parse(item['wlvl_now'].toString()),
+              "floodCatNow": item['flood_cat_now'].toString(),
+              "forecast": double.parse(item['forecast'].toString()),
+              "floodForecastCat": item['flood_cat'].toString(),
               "status": "Loading...",
-              "lastUpdate": "00:00 AM",
+              "lastUpdate": item['datetime'].toString(),
             },
 
             // Initialize environmental data placeholders
             "weatherData": {
-              "temperature": 0.0,
-              "description": "Loading...",
-              "pressure": 0,
-            }
+              "temperature": item['temperature'].toString(),
+              "description": item['description'].toString(),
+              "pressure": item['pressure'].toString(),
+            },
           };
-        }
+        });
       }
       return tempSensors;
     } catch (e) {

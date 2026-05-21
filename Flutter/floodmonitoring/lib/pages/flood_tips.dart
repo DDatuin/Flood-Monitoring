@@ -11,7 +11,6 @@ class FloodTips extends StatefulWidget {
 }
 
 class _FloodTipsState extends State<FloodTips> {
-
   // ========================================
   // STATE / VARIABLES
   // ========================================
@@ -20,6 +19,16 @@ class _FloodTipsState extends State<FloodTips> {
 
   /// ----- VEHICLE TIPS -----
   final Map<String, String> vehicleTips = {
+    'Pedestrian': """
+Walking through floodwater can be dangerous even when the water appears shallow. Floodwater may contain open manholes, debris, electrical hazards, or contaminated water.  
+
+• Avoid walking through moving floodwater whenever possible.  
+• Use elevated walkways or safer alternate routes.  
+• Wear waterproof boots with good grip to avoid slipping.  
+• Do not walk through water if you cannot clearly see the ground.  
+• Stay away from electrical posts, exposed wires, and drainage openings.  
+• If floodwater rises quickly, move immediately to higher ground.  
+""",
     'Bicycle': """
 Bicycles lack stability in water. Even 10cm of moving water can wash a cyclist away, and submerged hazards are invisible.
 
@@ -58,14 +67,21 @@ While trucks have higher clearance, their large surface area makes them more sus
 
   /// ----- STOCK IMAGE -----
   final List<String> stockImage = [
+    'stock-image-pedestrian.png',
     'stock-image-bike.png',
     'stock-image-motorcycle.png',
     'stock-image-car.png',
-    'stock-image-truck.png'
+    'stock-image-truck.png',
   ];
 
   /// ----- VEHICLE LIST -----
-  final List<String> vehicleList = ['Bicycle', 'Motorcycle', 'Car', 'Truck'];
+  final List<String> vehicleList = [
+    'Pedestrian',
+    'Bicycle',
+    'Motorcycle',
+    'Car',
+    'Truck',
+  ];
 
   // ========================================
   // BUILD / CORE UI
@@ -101,7 +117,10 @@ While trucks have higher clearance, their large surface area makes them more sus
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected ? colorPrimary : Colors.white,
                       borderRadius: BorderRadius.circular(20),
@@ -190,6 +209,7 @@ While trucks have higher clearance, their large surface area makes them more sus
           const SizedBox(height: 12),
           _parseBoldText(tip),
           const SizedBox(height: 20),
+
           /// Illustration
           Container(
             width: double.infinity,
@@ -199,7 +219,9 @@ While trucks have higher clearance, their large surface area makes them more sus
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.blue.shade100),
               image: DecorationImage(
-                image: AssetImage('assets/images/stock/${stockImage[vehicleList.indexOf(title)]}'),
+                image: AssetImage(
+                  'assets/images/stock/${stockImage[vehicleList.indexOf(title)]}',
+                ),
                 fit: BoxFit.cover,
               ),
             ),
@@ -215,6 +237,7 @@ While trucks have higher clearance, their large surface area makes them more sus
             ),
           ),
           const SizedBox(height: 16),
+
           /// ----- USEFUL RESOURCES -----
           Text(
             "Useful Resources:",
@@ -257,46 +280,50 @@ While trucks have higher clearance, their large surface area makes them more sus
 
     for (final match in exp.allMatches(text)) {
       if (match.start > start) {
-        spans.add(TextSpan(
-          text: text.substring(start, match.start),
+        spans.add(
+          TextSpan(
+            text: text.substring(start, match.start),
+            style: const TextStyle(
+              fontFamily: 'AvenirNext',
+              fontSize: 16,
+              height: 1.6,
+              color: Colors.black87,
+            ),
+          ),
+        );
+      }
+
+      spans.add(
+        TextSpan(
+          text: match.group(1),
+          style: const TextStyle(
+            fontFamily: 'AvenirNext',
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            height: 1.6,
+            color: Colors.black87,
+          ),
+        ),
+      );
+
+      start = match.end;
+    }
+
+    if (start < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(start),
           style: const TextStyle(
             fontFamily: 'AvenirNext',
             fontSize: 16,
             height: 1.6,
             color: Colors.black87,
           ),
-        ));
-      }
-
-      spans.add(TextSpan(
-        text: match.group(1),
-        style: const TextStyle(
-          fontFamily: 'AvenirNext',
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          height: 1.6,
-          color: Colors.black87,
         ),
-      ));
-
-      start = match.end;
+      );
     }
 
-    if (start < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(start),
-        style: const TextStyle(
-          fontFamily: 'AvenirNext',
-          fontSize: 16,
-          height: 1.6,
-          color: Colors.black87,
-        ),
-      ));
-    }
-
-    return RichText(
-      text: TextSpan(children: spans),
-    );
+    return RichText(text: TextSpan(children: spans));
   }
 
   /// ----- BULLET LINK WIDGET -----
@@ -307,10 +334,7 @@ While trucks have higher clearance, their large surface area makes them more sus
         onTap: () async {
           final Uri uri = Uri.parse(url);
           try {
-            await launchUrl(
-              uri,
-              mode: LaunchMode.externalApplication,
-            );
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
           } catch (e) {
             debugPrint("Could not launch $url: $e");
           }
