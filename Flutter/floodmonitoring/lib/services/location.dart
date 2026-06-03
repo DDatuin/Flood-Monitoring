@@ -32,7 +32,8 @@ class LocationService {
       }
 
       // If they just accepted (WhileInUse or Always), we RESTART
-      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
         print('Permission accepted! Restarting app...');
         Phoenix.rebirth(context); // This restarts the app
         return null;
@@ -48,13 +49,12 @@ class LocationService {
   static Future<String> getAddressFromPosition(Position position) async {
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(
-          position.latitude,
-          position.longitude
+        position.latitude,
+        position.longitude,
       );
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
-
 
         if (place.street!.toLowerCase().contains(place.name!.toLowerCase())) {
           return "${place.street}, ${place.locality}";
@@ -65,6 +65,27 @@ class LocationService {
       return "Address not found";
     } catch (e) {
       return "Error: ${e.toString()}";
+    }
+  }
+
+  static Future<double> getAvoidZoneBuffer({
+    double lookAheadMinutes = 5,
+    double minBuffer = 300,
+    double maxBuffer = 3000,
+  }) async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      double speedMps = position.speed;
+
+      double buffer = speedMps * 60 * lookAheadMinutes;
+
+      return buffer.clamp(minBuffer, maxBuffer);
+    } catch (e) {
+      print("Error calculating buffer: $e");
+      return minBuffer;
     }
   }
 }

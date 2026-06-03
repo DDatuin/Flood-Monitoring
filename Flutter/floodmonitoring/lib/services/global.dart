@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-/// API KEYS
-const String googleMapAPIKey = "AIzaSyAMamxCz-N-wiGSq4-DfVpD9zOpP_GZ_9o";
-const String hereAPIKey = "TiHkVyYjkDXokfAstiAx97Iqttb-eqUTd1vCq1aiqhE";
-
 /// Testing mode
 bool testingMode = false;
 bool settingPin = true;

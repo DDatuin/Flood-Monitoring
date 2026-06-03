@@ -22,15 +22,18 @@ class FloodLevel {
         final data = body["data"];
 
         final floodHeight = (data["wlvl_now"] ?? 0).toDouble();
+        final forecastHeight = (data["forecast"] ?? 0).toDouble();
 
         final status = getStatusText(floodHeight);
+        final forecastStatus = getStatusText(forecastHeight);
 
         return {
           "floodHeight": floodHeight,
           "floodCatNow": data["flood_cat_now"].toString(),
-          "forecast": double.parse(data["forecast"].toString()),
+          "forecast": forecastHeight,
           "floodForecastCat": data["flood_cat"].toString(),
           "status": status,
+          "forecastedStatus": forecastStatus,
           "lastUpdate": data["lastUpdate"].toString(),
         };
       } else {
@@ -45,6 +48,7 @@ class FloodLevel {
         "forecast": null,
         "floodForecastCat": "-",
         "status": "Error",
+        "forecastedStatus": "Error",
         "lastUpdate": getCurrentTime(),
       };
     }

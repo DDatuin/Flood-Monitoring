@@ -33,6 +33,7 @@ class SensorService {
               "forecast": double.parse(item['forecast'].toString()),
               "floodForecastCat": item['flood_cat'].toString(),
               "status": "Loading...",
+              "forecastedStatus": "Loading...",
               "lastUpdate": item['datetime'].toString(),
             },
 

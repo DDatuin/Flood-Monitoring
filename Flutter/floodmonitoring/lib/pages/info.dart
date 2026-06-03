@@ -241,12 +241,10 @@ class _InfoState extends State<Info> {
   }
 
   /// ----- DATA STATUS COLOR -----
-  Color dataStatusColor() {
+  Color dataStatusColor(status) {
     if (selectedVehicle.isEmpty) {
       return Colors.black;
     }
-
-    final status = sensors[sensorViewInfo]?["sensorData"]?['status'];
 
     switch (status) {
       case 'Safe':
@@ -285,7 +283,14 @@ class _InfoState extends State<Info> {
             (selectedVehicle.isEmpty)
                 ? "Pending..."
                 : (sensor['sensorData']['status'] ?? "Unknown"),
-            color: dataStatusColor(),
+            color: dataStatusColor(sensor['sensorData']['status']),
+          ),
+          _item(
+            "Forecasted Flood Status",
+            (selectedVehicle.isEmpty)
+                ? "Pending..."
+                : (sensor['sensorData']['forecastedStatus'] ?? "Uknownn"),
+            color: dataStatusColor(sensor['sensorData']['forecastedStatus']),
           ),
           _item("Last Update", formatToPHT(sensor['sensorData']['lastUpdate'])),
         ],

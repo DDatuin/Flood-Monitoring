@@ -1,15 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
-import 'package:floodmonitoring/services/api_configs.dart';
 import 'package:floodmonitoring/services/flood_level.dart';
 import 'package:floodmonitoring/services/global.dart';
 import 'package:floodmonitoring/services/location.dart';
 import 'package:floodmonitoring/services/polyline.dart';
 import 'package:floodmonitoring/services/sensor_service.dart';
 import 'package:floodmonitoring/services/threshold_service.dart';
-import 'package:floodmonitoring/services/url_tile_provider.dart';
 import 'package:floodmonitoring/services/weather.dart';
 import 'package:floodmonitoring/utils/converters.dart';
 import 'package:floodmonitoring/utils/style.dart';
@@ -25,7 +22,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:delightful_toast/delight_toast.dart';
 import 'package:delightful_toast/toast/components/toast_card.dart';
-import 'package:http/http.dart' as http;
 import 'package:vibration/vibration.dart';
 
 import 'package:intl/intl.dart';
@@ -150,16 +146,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-
-    _permissionLocation();
-
-    selectedVehicle = "";
-    _updateTime();
-
-    _initializeEverything();
-
-    _startTimer();
-    startLocationUpdates();
+    _bootstrap();
   }
 
   @override
@@ -167,6 +154,20 @@ class _MapScreenState extends State<MapScreen> {
     _positionStream?.cancel();
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _bootstrap() async {
+    selectedVehicle = "";
+    _updateTime();
+
+    final pos = await LocationService.getCurrentLocation(context);
+    if (pos == null) return;
+
+    await _initializeEverything();
+
+    _startTimer();
+
+    startLocationUpdates();
   }
 
   // ========================================
@@ -247,7 +248,6 @@ class _MapScreenState extends State<MapScreen> {
         entry.value,
       );
     }
-
     setState(() {
       sensors.forEach((id, sensor) {
         BitmapDescriptor currentIcon;
@@ -269,6 +269,25 @@ class _MapScreenState extends State<MapScreen> {
             zIndex: 2,
           ),
         );
+
+        if (showSensorCoverage) {
+          final Color statusColor = _getStatusColor(
+            sensor['sensorData']?['forecastedStatus'] ?? 'Safe',
+          );
+
+          _circles.removeWhere((c) => c.circleId.value == '${id}_circle');
+
+          _circles.add(
+            Circle(
+              circleId: CircleId('${id}_circle'),
+              center: sensor['position'],
+              radius: (sensor['radius'] as num).toDouble(),
+              strokeWidth: 2,
+              strokeColor: statusColor,
+              fillColor: statusColor.withOpacity(0.3),
+            ),
+          );
+        }
       });
     });
   }
@@ -284,11 +303,6 @@ class _MapScreenState extends State<MapScreen> {
 
   Position? _lastUpdatedPosition;
   StreamSubscription<Position>? _positionStream;
-
-  /// ----- PERMISSION LOCATION -----
-  Future<void> _permissionLocation() async {
-    await LocationService.getCurrentLocation(context);
-  }
 
   /// ----- LOAD CURRENT LOCATION -----
   Future<void> _loadCurrentLocation() async {
@@ -360,7 +374,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// ----- UPDATE POSITION -----
-  void _updatePosition(Position position) {
+  void _updatePosition(Position position) async {
     LatLng rawLatLng = LatLng(position.latitude, position.longitude);
 
     LatLng userLatLng = rawLatLng;
@@ -397,9 +411,9 @@ class _MapScreenState extends State<MapScreen> {
 
     final avoidZones = buildAvoidZonesFromSensors();
     bool inside = isInsideAvoidZone(userLatLng, avoidZones);
-    bool near = isNearAvoidZone(userLatLng, avoidZones);
+    bool near = await isNearAvoidZone(userLatLng, avoidZones);
 
-    if (near) {
+    if (near || inside) {
       startAlert();
     } else {
       stopAlert();
@@ -574,11 +588,12 @@ class _MapScreenState extends State<MapScreen> {
       showSensorSheet = true;
     });
 
-    // Update circle for the selected sensor
     if (showSensorCoverage) {
       _circles.removeWhere((c) => c.circleId.value.startsWith(id));
 
-      final Color statusColor = _getStatusColor(sensor['sensorData']['status']);
+      final Color statusColor = _getStatusColor(
+        sensor['sensorData']['forecastedStatus'],
+      );
 
       _circles.add(
         Circle(
@@ -643,13 +658,15 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// ----- ADD USER MARKER -----
-  void _addUserMarker() {
+  void _addUserMarker() async {
     if (currentPosition == null || userIcon == null) return;
 
     final userLatLng = LatLng(
       currentPosition!.latitude,
       currentPosition!.longitude,
     );
+
+    double dynamicBuffer = await LocationService.getAvoidZoneBuffer();
 
     setState(() {
       _markers.add(
@@ -670,9 +687,9 @@ class _MapScreenState extends State<MapScreen> {
         Circle(
           circleId: const CircleId('user_glow'),
           center: userLatLng,
-          radius: 200.0,
+          radius: dynamicBuffer,
           fillColor: Colors.blue.withOpacity(0.10),
-          strokeColor: Colors.transparent, // No border
+          strokeColor: Colors.transparent,
           strokeWidth: 0,
           zIndex: 1,
         ),
@@ -708,7 +725,6 @@ class _MapScreenState extends State<MapScreen> {
       sensors.forEach((id, sensor) {
         final String status = sensor['sensorData']?['status'] ?? 'Default';
 
-        // 1. Filter logic: skip non-critical sensors if the toggle is ON
         if (showCriticalSensors) {
           if (status != 'Warning' && status != 'Danger') {
             return;
@@ -737,6 +753,23 @@ class _MapScreenState extends State<MapScreen> {
             zIndex: 2,
           ),
         );
+
+        if (showSensorCoverage && showAllSensors) {
+          final Color statusColor = _getStatusColor(
+            sensor['sensorData']?['forecastedStatus'] ?? 'Safe',
+          );
+
+          _circles.add(
+            Circle(
+              circleId: CircleId('${id}_circle'),
+              center: sensor['position'],
+              radius: (sensor['radius'] as num).toDouble(),
+              strokeWidth: 2,
+              strokeColor: statusColor,
+              fillColor: statusColor.withOpacity(0.3),
+            ),
+          );
+        }
       });
     });
   }
@@ -1024,10 +1057,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// ----- IS NEAR AVOID ZONE -----
-  bool isNearAvoidZone(
+  Future<bool> isNearAvoidZone(
     LatLng usersPosition,
     List<Map<String, dynamic>> avoidZones,
-  ) {
+  ) async {
     for (var zone in avoidZones) {
       LatLng zoneCenter = zone["position"];
       double radius = zone["radius"]; // in meters
@@ -1039,11 +1072,13 @@ class _MapScreenState extends State<MapScreen> {
         zoneCenter.longitude,
       );
 
-      if (distance <= radius + 300) {
-        return true; // near this zone
+      double dynamicBuffer = await LocationService.getAvoidZoneBuffer();
+
+      if (distance <= radius + dynamicBuffer) {
+        return true;
       }
     }
-    return false; // far any zone
+    return false;
   }
 
   /// ----- GENERATE CIRCLE POLYGON -----
@@ -1088,7 +1123,7 @@ class _MapScreenState extends State<MapScreen> {
 
     sensors.forEach((sensorId, sensor) {
       final sensorData = sensor['sensorData'];
-      final status = sensorData?['status'];
+      final status = sensorData?['forecastedStatus'];
 
       if (status == 'Warning' || status == 'Danger') {
         zones.add({"position": sensor['position'], "radius": sensor['radius']});
@@ -1432,7 +1467,7 @@ class _MapScreenState extends State<MapScreen> {
             zoomControlsEnabled: false,
             tileOverlays: showFloodZones
                 ? {}
-                : {}, //getFloodTileOverlays() : {},
+                : {}, //getFloodTileOverlays() : {},  ===Disabled due to limited cloud server space===
             //minMaxZoomPreference: const MinMaxZoomPreference(13.0, 18.0),
           ),
 
@@ -2160,6 +2195,15 @@ class _MapScreenState extends State<MapScreen> {
                                       ? "Pending..."
                                       : (data?['status'] ?? "-"),
                                   _getStatusColor(data?['status'] ?? ""),
+                                ),
+                                _statusRow(
+                                  "Forecasted Status",
+                                  (selectedVehicle.isEmpty)
+                                      ? "Pending..."
+                                      : (data?['forecastedStatus'] ?? "-"),
+                                  _getStatusColor(
+                                    data?['forecastedStatus'] ?? "",
+                                  ),
                                 ),
                                 _infoRow(
                                   "Last Update",
