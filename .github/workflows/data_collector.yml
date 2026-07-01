@@ -1,0 +1,19 @@
+name: Run Data Collector
+
+on:
+  schedule:
+    # Every 5 minutes
+    - cron: "*/5 * * * *"
+
+  workflow_dispatch:
+
+jobs:
+  run-data-collector:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call Django endpoint
+        run: |
+          curl -X POST \
+            "${{ secrets.DATA_COLLECTOR_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.INTERNAL_API_TOKEN }}"
