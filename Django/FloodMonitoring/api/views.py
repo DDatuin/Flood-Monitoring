@@ -1,10 +1,10 @@
 import json
 
-from Django.FloodMonitoring.api.utils.data_collector import run_data_collection_cycle
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from api.utils import api_response, build_avoid_polygons, clean_route_response, normalize_avoid_zones, safe_float
+from api.utils import api_response, build_avoid_polygons, normalize_avoid_zones
+from api.util.data_collector import run_data_collection_cycle
 from .supabase.utils import get_emergency_contacts_from_supabase, get_latest_data_from_supabase, get_latest_sensor_wl_data_from_supabase, get_sensor_history_from_supabase, get_specific_sensor_details_from_supabase, get_vehicle_thresholds_from_supabase, get_web_chart_data_from_supabase
 import requests, os
 
@@ -13,7 +13,7 @@ def run_data_collector(request):
 
     token = request.headers.get("Authorization")
 
-    if token != f"Bearer {os.getenv('INTERNAL_API_TOKEN')}":
+    if token != f"Bearer {os.getenv('SECRET_TOKEN_FOR_LISTENER')}":
         return api_response(
             success=False,
             data=None,
