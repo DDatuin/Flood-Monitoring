@@ -1,5 +1,6 @@
 import json
 
+from django.http import JsonResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -14,21 +15,11 @@ def run_data_collector(request):
     token = request.headers.get("Authorization")
 
     if token != f"Bearer {os.getenv('SECRET_TOKEN_FOR_LISTENER')}":
-        return api_response(
-            success=False,
-            data=None,
-            message="Missing secret token",
-            status=400
-        )
+        return JsonResponse({"ok": False})
 
     run_data_collection_cycle()
 
-    return api_response(
-        success=True,
-        data=None,
-        message="Latest Sensor Data Saved to Database"
-    )
-
+    return JsonResponse({"ok": True})
 @api_view(['GET'])
 def get_latest_data(request): 
 
