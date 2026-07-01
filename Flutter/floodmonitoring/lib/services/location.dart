@@ -5,7 +5,10 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_phoenix/flutter_phoenix.dart';
 
 class LocationService {
-  // Added BuildContext context as a parameter
+  static double _smoothedSpeed = 0.0;
+  static const double _alpha = 0.2;
+
+  // Added BuildContext context as a parameters
   static Future<Position?> getCurrentLocation(BuildContext context) async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
@@ -68,24 +71,29 @@ class LocationService {
     }
   }
 
-  static Future<double> getAvoidZoneBuffer({
+  static void updateSpeed(Position position) {
+    if (position.speedAccuracy > 3) {
+      return;
+    }
+
+    double speed = position.speed;
+
+    if (speed < 0) speed = 0;
+
+    if (_smoothedSpeed == 0) {
+      _smoothedSpeed = speed;
+    } else {
+      _smoothedSpeed = _alpha * speed + (1 - _alpha) * _smoothedSpeed;
+    }
+  }
+
+  static double getAvoidZoneBuffer({
     double lookAheadMinutes = 5,
     double minBuffer = 1000,
     double maxBuffer = 3000,
-  }) async {
-    try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+  }) {
+    final buffer = _smoothedSpeed * 60 * lookAheadMinutes;
 
-      double speedMps = position.speed;
-
-      double buffer = speedMps * 60 * lookAheadMinutes;
-
-      return buffer.clamp(minBuffer, maxBuffer);
-    } catch (e) {
-      print("Error calculating buffer: $e");
-      return minBuffer;
-    }
+    return buffer.clamp(minBuffer, maxBuffer);
   }
 }

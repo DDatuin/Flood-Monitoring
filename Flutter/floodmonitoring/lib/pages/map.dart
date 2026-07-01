@@ -324,7 +324,6 @@ class _MapScreenState extends State<MapScreen> {
         setState(() => currentPosition = freshPosition);
         _addUserMarker();
         getWeather();
-        print("currentPosition: $currentPosition");
       }
     } catch (e) {
       print('Fresh location timeout or error: $e');
@@ -355,7 +354,6 @@ class _MapScreenState extends State<MapScreen> {
         iconCode = weather['iconCode'];
       });
     }
-    print('My Weather: $weather');
   }
 
   /// ----- START LOCATION UPDATES -----
@@ -378,6 +376,7 @@ class _MapScreenState extends State<MapScreen> {
     LatLng rawLatLng = LatLng(position.latitude, position.longitude);
 
     LatLng userLatLng = rawLatLng;
+    LocationService.updateSpeed(position);
 
     setState(() {
       currentPosition = position;
@@ -492,8 +491,6 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       sensors[sensorId]!['sensorData'] = data;
     });
-
-    print("Updated sensor $sensorId → $data");
   }
 
   Future<void> fetchDataForAllSensors() async {
@@ -503,7 +500,6 @@ class _MapScreenState extends State<MapScreen> {
       sensors.keys.map((sensorId) async {
         final data = await FloodLevel.fetchLatestSensorData(sensorId);
         updates[sensorId] = data;
-        print("Fetched sensor $sensorId → $data");
       }),
     );
 
@@ -514,7 +510,6 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     _refreshSensorMarkers();
-    print("All sensors updated");
   }
 
   /// ----- ON MAP CREATED -----
@@ -912,11 +907,6 @@ class _MapScreenState extends State<MapScreen> {
       });
     }
 
-    print(
-      "Saved Pin: ${savedPinPosition?.latitude}, ${savedPinPosition?.longitude}",
-    );
-    print("User: ${currentPosition!.latitude}, ${currentPosition!.longitude}");
-
     final BitmapDescriptor pinIcon = await BitmapDescriptor.fromAssetImage(
       const ImageConfiguration(size: Size(48, 48)),
       'assets/images/selected_location.png',
@@ -1081,45 +1071,9 @@ class _MapScreenState extends State<MapScreen> {
     return false;
   }
 
-  /// ----- GENERATE CIRCLE POLYGON -----
-  List<LatLng> _generateCirclePolygon(
-    LatLng center,
-    double radius,
-    int points,
-  ) {
-    List<LatLng> polygonPoints = [];
-    final R = 6371000; // Earth radius in meters
-    final dRad = radius / R;
-
-    for (int i = 0; i < points; i++) {
-      final theta = 2 * pi * i / points;
-      final lat =
-          asin(
-            sin(center.latitude * pi / 180) * cos(dRad) +
-                cos(center.latitude * pi / 180) * sin(dRad) * cos(theta),
-          ) *
-          180 /
-          pi;
-      final lng =
-          center.longitude +
-          atan2(
-                sin(theta) * sin(dRad) * cos(center.latitude * pi / 180),
-                cos(dRad) -
-                    sin(center.latitude * pi / 180) * sin(lat * pi / 180),
-              ) *
-              180 /
-              pi;
-      polygonPoints.add(LatLng(lat, lng));
-    }
-
-    return polygonPoints;
-  }
-
   /// ----- BUILD AVOID ZONES FROM SENSORS -----
   List<Map<String, dynamic>> buildAvoidZonesFromSensors() {
     List<Map<String, dynamic>> zones = [];
-
-    print("BAZFS - sensors: ${sensors}");
 
     sensors.forEach((sensorId, sensor) {
       final sensorData = sensor['sensorData'];
@@ -1130,22 +1084,52 @@ class _MapScreenState extends State<MapScreen> {
       }
     });
 
-    print("BAZFS - zones: ${zones}");
     return zones;
+  }
+
+  // Routing Variables
+  bool userTooFar = false;
+  bool reRouteAwayFromFlood = false;
+  List<LatLng>? route;
+  static const double trimDistance = 25;
+
+  void _trimRoute() {
+    int closestIndex = 0;
+    double closestDistance = double.infinity;
+
+    for (int i = 0; i < route!.length; i++) {
+      double distance = Geolocator.distanceBetween(
+        currentPosition!.latitude,
+        currentPosition!.longitude,
+        route![i].latitude,
+        route![i].longitude,
+      );
+
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = i;
+      }
+    }
+
+    if (closestDistance < trimDistance && closestIndex > 0) {
+      route!.removeRange(0, closestIndex);
+    }
   }
 
   /// ----- DRAW ROUTE -----
   void _drawRoute(LatLng start, LatLng end) async {
-    final avoidZones = buildAvoidZonesFromSensors();
+    if (route == null || userTooFar || reRouteAwayFromFlood) {
+      final avoidZones = buildAvoidZonesFromSensors();
 
-    print(convertVehicle(selectedVehicle));
-
-    final route = await PolylineService.getRoute(
-      start,
-      end,
-      convertVehicle(selectedVehicle),
-      avoidZones,
-    );
+      route = await PolylineService.getRoute(
+        start,
+        end,
+        convertVehicle(selectedVehicle),
+        avoidZones,
+      );
+    } else {
+      _trimRoute();
+    }
 
     setState(() {
       _polylines.clear();
@@ -1153,7 +1137,7 @@ class _MapScreenState extends State<MapScreen> {
       _polylines.addAll([
         Polyline(
           polylineId: const PolylineId("route_border"),
-          points: route,
+          points: route!,
           color: colorPolylineMain,
           width: 6,
           startCap: Cap.roundCap,
@@ -1164,7 +1148,7 @@ class _MapScreenState extends State<MapScreen> {
 
         Polyline(
           polylineId: const PolylineId("route_main"),
-          points: route,
+          points: route!,
           color: colorPolylineBack,
           width: 4,
           startCap: Cap.roundCap,
@@ -1368,8 +1352,6 @@ class _MapScreenState extends State<MapScreen> {
     ).show(context);
   }
 
-  bool showFloodZones = false;
-
   /// ----- GET FLOOD TILE OVERLAYS -----
   // Set<TileOverlay> getFloodTileOverlays() {
   //   return {
@@ -1465,9 +1447,7 @@ class _MapScreenState extends State<MapScreen> {
             compassEnabled: false,
             myLocationEnabled: false,
             zoomControlsEnabled: false,
-            tileOverlays: showFloodZones
-                ? {}
-                : {}, //getFloodTileOverlays() : {},  ===Disabled due to limited cloud server space===
+            tileOverlays: {},
             //minMaxZoomPreference: const MinMaxZoomPreference(13.0, 18.0),
           ),
 
@@ -1538,8 +1518,7 @@ class _MapScreenState extends State<MapScreen> {
                     showMapSettingsPopup(
                       context,
                       initialMapType: mapTypeToString(_currentMapType),
-                      initialLayer: showFloodZones ? "Flood GIS" : "None",
-                      onConfirm: (selectedMapType, selectedLayer) {
+                      onConfirm: (selectedMapType) {
                         setState(() {
                           switch (selectedMapType) {
                             case "Normal":
@@ -1555,8 +1534,6 @@ class _MapScreenState extends State<MapScreen> {
                               _currentMapType = MapType.terrain;
                               break;
                           }
-
-                          showFloodZones = (selectedLayer == "Flood GIS");
                         });
                       },
                     );
@@ -2620,7 +2597,6 @@ class _MapScreenState extends State<MapScreen> {
                                     final hasValidPin =
                                         savedPinPosition != null &&
                                         savedPinPosition != "null";
-                                    print("hasValidPin: $hasValidPin");
                                     setState(() {
                                       normalRouting = false;
                                       showRerouteConfirmationSheet = false;

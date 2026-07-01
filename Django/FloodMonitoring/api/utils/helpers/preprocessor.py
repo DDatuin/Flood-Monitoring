@@ -25,7 +25,7 @@ def engineer_features_for_sensor(reading_queue: deque) -> dict:
         'slope_lag_10': slope_lag_10,
     }
 
-def engineer_features_for_weather_api(rainfall_history) -> dict:
+def engineer_features_for_weather_api(rainfall_history: deque) -> dict:
 
     values = [rain for (_, rain) in rainfall_history]
 

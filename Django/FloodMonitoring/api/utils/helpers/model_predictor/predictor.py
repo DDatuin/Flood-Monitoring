@@ -21,6 +21,9 @@ FEATURE_ORDER = [
 
 
 def predict_batch(datapoint_batch):
+    if not datapoint_batch:
+        return []
+
     model = get_model()
 
     df = pd.DataFrame(datapoint_batch)

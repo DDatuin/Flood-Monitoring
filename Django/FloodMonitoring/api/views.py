@@ -1,5 +1,6 @@
 import json
 
+from Django.FloodMonitoring.api.utils.data_collector import run_data_collection_cycle
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -7,6 +8,26 @@ from api.utils import api_response, build_avoid_polygons, clean_route_response, 
 from .supabase.utils import get_emergency_contacts_from_supabase, get_latest_data_from_supabase, get_latest_sensor_wl_data_from_supabase, get_sensor_history_from_supabase, get_specific_sensor_details_from_supabase, get_vehicle_thresholds_from_supabase, get_web_chart_data_from_supabase
 import requests, os
 
+@api_view(['POST'])
+def run_data_collector(request):
+
+    token = request.headers.get("Authorization")
+
+    if token != f"Bearer {os.getenv('INTERNAL_API_TOKEN')}":
+        return api_response(
+            success=False,
+            data=None,
+            message="Missing secret token",
+            status=400
+        )
+
+    run_data_collection_cycle()
+
+    return api_response(
+        success=True,
+        data=None,
+        message="Latest Sensor Data Saved to Database"
+    )
 
 @api_view(['GET'])
 def get_latest_data(request): 

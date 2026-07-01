@@ -4,7 +4,7 @@ from dateutil.relativedelta import relativedelta
 
 from .client import supabase
 
-def push_to_supabase(forecast_data_batch, new_data_batch):
+def push_blynk_data_to_supabase(forecast_data_batch, new_data_batch):
 
     sensor_map = {
         (row['sensor_id'], row['timestamp']): row

@@ -13,8 +13,6 @@ class PolylineService {
     List<Map<String, dynamic>> avoidZones,
   ) async {
     try {
-      print("AVOID ZONES: $avoidZones");
-
       final payload = {
         "start": [origin.latitude, origin.longitude],
         "end": [destination.latitude, destination.longitude],
@@ -36,9 +34,6 @@ class PolylineService {
         body: jsonEncode(payload),
       );
 
-      print("RAW RESPONSE: ${response.body}");
-      print("STATUS: ${response.statusCode}");
-
       final body = jsonDecode(response.body);
 
       if (response.statusCode == 200 && body["success"] == true) {
@@ -48,8 +43,6 @@ class PolylineService {
           return LatLng(coord[1], coord[0]);
         }).toList();
       }
-
-      print(body["error"]);
 
       return [];
     } catch (e) {

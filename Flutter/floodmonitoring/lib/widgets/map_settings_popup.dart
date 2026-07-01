@@ -2,25 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:floodmonitoring/utils/style.dart';
 
 void showMapSettingsPopup(
-    BuildContext context, {
-      required String initialMapType,
-      required String initialLayer,
-      required Function(String mapType, String layer) onConfirm,
-      bool initialFloodZone = false,
-    }) {
+  BuildContext context, {
+  required String initialMapType,
+  required Function(String mapType) onConfirm,
+}) {
   showDialog(
     context: context,
     barrierDismissible: false,
     builder: (context) {
       String selectedMapType = initialMapType;
-      String selectedLayer = initialLayer;
-      bool showFloodZones = initialFloodZone;
 
       return WillPopScope(
         onWillPop: () async => false,
         child: Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 40,
+          ),
           child: StatefulBuilder(
             builder: (context, setState) {
               return Container(
@@ -45,7 +44,11 @@ void showMapSettingsPopup(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.layers_rounded, color: colorPrimary, size: 26),
+                          Icon(
+                            Icons.layers_rounded,
+                            color: colorPrimary,
+                            size: 26,
+                          ),
                           const SizedBox(width: 10),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,59 +100,33 @@ void showMapSettingsPopup(
                                   label: "Normal",
                                   image: "assets/images/layers/normal.png",
                                   selected: selectedMapType == "Normal",
-                                  onTap: () => setState(() => selectedMapType = "Normal"),
+                                  onTap: () => setState(
+                                    () => selectedMapType = "Normal",
+                                  ),
                                 ),
                                 mapImageOption(
                                   label: "Satellite",
                                   image: "assets/images/layers/satellite.png",
                                   selected: selectedMapType == "Satellite",
-                                  onTap: () => setState(() => selectedMapType = "Satellite"),
+                                  onTap: () => setState(
+                                    () => selectedMapType = "Satellite",
+                                  ),
                                 ),
                                 mapImageOption(
                                   label: "Hybrid",
                                   image: "assets/images/layers/hybrid.png",
                                   selected: selectedMapType == "Hybrid",
-                                  onTap: () => setState(() => selectedMapType = "Hybrid"),
+                                  onTap: () => setState(
+                                    () => selectedMapType = "Hybrid",
+                                  ),
                                 ),
                                 mapImageOption(
                                   label: "Terrain",
                                   image: "assets/images/layers/terrain.png",
                                   selected: selectedMapType == "Terrain",
-                                  onTap: () => setState(() => selectedMapType = "Terrain"),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            _sectionTitle("Overlays"),
-                            GridView.count(
-                              crossAxisCount: 2,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 1.1,
-                              children: [
-                                mapImageOption(
-                                  label: "None",
-                                  image: "assets/images/layers/none.png",
-                                  selected: selectedLayer == "None",
-                                  onTap: () {
-                                    setState(() {
-                                      selectedLayer = "None";
-                                      showFloodZones = false;
-                                    });
-                                  },
-                                ),
-                                mapImageOption(
-                                  label: "Flood Zones",
-                                  image: "assets/images/layers/gis.png",
-                                  selected: selectedLayer == "Flood GIS",
-                                  onTap: () {
-                                    setState(() {
-                                      selectedLayer = "Flood GIS";
-                                      showFloodZones = true;
-                                    });
-                                  },
+                                  onTap: () => setState(
+                                    () => selectedMapType = "Terrain",
+                                  ),
                                 ),
                               ],
                             ),
@@ -174,7 +151,7 @@ void showMapSettingsPopup(
                             child: primaryButton(
                               text: "APPLY",
                               onTap: () {
-                                onConfirm(selectedMapType, selectedLayer);
+                                onConfirm(selectedMapType);
                                 Navigator.pop(context);
                               },
                             ),
@@ -192,7 +169,6 @@ void showMapSettingsPopup(
     },
   );
 }
-
 
 /// ----- SECTION TITLE -----
 Widget _sectionTitle(String text) {
@@ -240,7 +216,9 @@ Widget mapImageOption({
         children: [
           Expanded(
             child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(14),
+              ),
               child: Image.asset(
                 image,
                 fit: BoxFit.cover,
