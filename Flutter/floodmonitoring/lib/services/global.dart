@@ -41,7 +41,7 @@ final List<Map<String, dynamic>> floodStatuses = [
 Map<String, Map<String, dynamic>> sensors = {
   "SENS_001": {
     //Near basketball Court
-    "position": const LatLng(14.601570218473059, 121.00789117225852),
+    "position": const LatLng(14.6000103311735, 121.00910391615),
     "token": "rDsIi--IkEDcdOVLSBXh2DvfusmwPSFc",
     "pin": "V0",
     "radius": 100.0,

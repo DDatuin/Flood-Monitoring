@@ -70,7 +70,7 @@ class LocationService {
 
   static Future<double> getAvoidZoneBuffer({
     double lookAheadMinutes = 5,
-    double minBuffer = 300,
+    double minBuffer = 1000,
     double maxBuffer = 3000,
   }) async {
     try {

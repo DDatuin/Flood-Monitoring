@@ -219,7 +219,7 @@ class _InfoState extends State<Info> {
                   horizontal: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: dataStatusColor(),
+                  color: dataStatusColor(sensor['sensorData']['status']),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
