@@ -371,6 +371,32 @@ class _MapScreenState extends State<MapScreen> {
         );
   }
 
+  double routeDistanceThreshold = 25.0;
+
+  bool _checkUserClosestDistanceToRoute() {
+    int closestIndex = 0;
+    double closestDistance = double.infinity;
+
+    for (int i = 0; i < route.length; i++) {
+      double distance = Geolocator.distanceBetween(
+        currentPosition!.latitude,
+        currentPosition!.longitude,
+        route[i].latitude,
+        route[i].longitude,
+      );
+
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = i;
+      }
+    }
+
+    if (closestDistance >= routeDistanceThreshold) {
+      return true;
+    }
+    return false;
+  }
+
   /// ----- UPDATE POSITION -----
   void _updatePosition(Position position) async {
     LatLng rawLatLng = LatLng(position.latitude, position.longitude);
@@ -380,6 +406,10 @@ class _MapScreenState extends State<MapScreen> {
 
     setState(() {
       currentPosition = position;
+
+      if (route.isNotEmpty) {
+        userTooFar = _checkUserClosestDistanceToRoute();
+      }
     });
 
     _addUserMarker();
@@ -1089,20 +1119,20 @@ class _MapScreenState extends State<MapScreen> {
 
   // Routing Variables
   bool userTooFar = false;
-  bool reRouteAwayFromFlood = false;
-  List<LatLng>? route;
+  bool isRerouting = false;
+  List<LatLng> route = [];
   static const double trimDistance = 25;
 
   void _trimRoute() {
     int closestIndex = 0;
     double closestDistance = double.infinity;
 
-    for (int i = 0; i < route!.length; i++) {
+    for (int i = 0; i < route.length; i++) {
       double distance = Geolocator.distanceBetween(
         currentPosition!.latitude,
         currentPosition!.longitude,
-        route![i].latitude,
-        route![i].longitude,
+        route[i].latitude,
+        route[i].longitude,
       );
 
       if (distance < closestDistance) {
@@ -1112,13 +1142,16 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     if (closestDistance < trimDistance && closestIndex > 0) {
-      route!.removeRange(0, closestIndex);
+      route.removeRange(0, closestIndex);
     }
   }
 
   /// ----- DRAW ROUTE -----
   void _drawRoute(LatLng start, LatLng end) async {
-    if (route == null || userTooFar || reRouteAwayFromFlood) {
+    if (route.isEmpty || userTooFar || isRerouting) {
+      isRerouting = false;
+      userTooFar = false;
+
       final avoidZones = buildAvoidZonesFromSensors();
 
       route = await PolylineService.getRoute(
@@ -1137,7 +1170,7 @@ class _MapScreenState extends State<MapScreen> {
       _polylines.addAll([
         Polyline(
           polylineId: const PolylineId("route_border"),
-          points: route!,
+          points: route,
           color: colorPolylineMain,
           width: 6,
           startCap: Cap.roundCap,
@@ -1148,7 +1181,7 @@ class _MapScreenState extends State<MapScreen> {
 
         Polyline(
           polylineId: const PolylineId("route_main"),
-          points: route!,
+          points: route,
           color: colorPolylineBack,
           width: 4,
           startCap: Cap.roundCap,
@@ -1351,20 +1384,6 @@ class _MapScreenState extends State<MapScreen> {
       snackbarDuration: Durations.extralong4,
     ).show(context);
   }
-
-  /// ----- GET FLOOD TILE OVERLAYS -----
-  // Set<TileOverlay> getFloodTileOverlays() {
-  //   return {
-  //     TileOverlay(
-  //       tileOverlayId: TileOverlayId('xyz_tiles'),
-  //       tileProvider: UrlTileProvider(
-  //         urlTemplate: '${ApiConfig.floodTiles}{z}/{x}/{y}.png',
-  //       ),
-  //       transparency: 0.3,
-  //       zIndex: 1,
-  //     ),
-  //   };
-  // }
 
   MapType _currentMapType = MapType.normal;
 
@@ -2600,6 +2619,7 @@ class _MapScreenState extends State<MapScreen> {
                                     setState(() {
                                       normalRouting = false;
                                       showRerouteConfirmationSheet = false;
+                                      isRerouting = true;
                                     });
 
                                     if (!hasValidPin) {

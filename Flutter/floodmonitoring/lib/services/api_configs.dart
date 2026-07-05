@@ -1,6 +1,6 @@
 class ApiConfig {
   static const String baseUrl =
-      'https://fdw-djangobackend.onrender.com'; //change this based on the backend's deployment (either Railway, localhost, or other cloud hosting sites) :P
+      'https://flood-monitoring-e7h6.onrender.com'; //change this based on the backend's deployment (either Railway, localhost, or other cloud hosting sites) :P
 
   //endpoints with no parameters
   static const String latestData = '$baseUrl/api/latest-data/';
@@ -21,8 +21,6 @@ class ApiConfig {
   static const String webChart = '$baseUrl/api/web-history';
 
   static const String userWeather = '$baseUrl/api/user-weather';
-
-  static const String floodTiles = '$baseUrl/media/tiles/';
 
   static const String latestSpecific = '$baseUrl/api/latest-specific';
 }

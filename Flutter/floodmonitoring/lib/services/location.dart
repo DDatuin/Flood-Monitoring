@@ -89,7 +89,7 @@ class LocationService {
 
   static double getAvoidZoneBuffer({
     double lookAheadMinutes = 5,
-    double minBuffer = 1000,
+    double minBuffer = 300,
     double maxBuffer = 3000,
   }) {
     final buffer = _smoothedSpeed * 60 * lookAheadMinutes;
